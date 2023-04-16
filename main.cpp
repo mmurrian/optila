@@ -5,10 +5,9 @@ int main(int argc, char *argv[]) {
       {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}};
   static constexpr optila::Matrix<double, 3, 1> b{{1}, {2}, {3}};
   static constexpr auto C = A * b;
-  static_assert(
-      optila::details::is_matrix_v<typename decltype(C)::left_operand_type>);
-  static_assert(decltype(C)::num_rows == 3);
-  static_assert(decltype(C)::num_cols == 1);
+
+  static_assert(decltype(C)::num_rows() == 3);
+  static_assert(decltype(C)::num_cols() == 1);
 
   static constexpr auto D = optila::evaluate(C);
   static_assert(D(0, 0) == 14);
