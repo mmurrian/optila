@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <limits>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -197,10 +198,15 @@ enum class StorageOrder {
   ColumnMajor,
 };
 
+enum { Dynamic = std::numeric_limits<std::size_t>::max() };
+
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           StorageOrder Order = StorageOrder::RowMajor>
 class Matrix : public details::matrix_tag {
  public:
+  static_assert(NumRows != Dynamic && NumCols != Dynamic,
+                "Matrix must have static dimensions");
+
   using value_type = ValueType;
   constexpr static std::size_t num_rows() { return NumRows; }
   constexpr static std::size_t num_cols() { return NumCols; }
@@ -363,83 +369,61 @@ struct BuildState<Expression<Op, Operands...>> {
   using type = State<Op, typename BuildState<std::decay_t<Operands>>::type...>;
 };
 
-template <typename Expr, typename State>
-constexpr decltype(auto) evalLeftScalarOperand(Expr&& expr, State&& state) {
-  if constexpr (details::is_expression_literal_v<
-                    typename std::decay_t<Expr>::template operand_type<0>>)
-    return expr.template operand<0>()(std::get<0>(state.operands));
-  else
-    return expr.template operand<0>()();
-}
+template <typename T>
+struct is_operand_state : std::false_type {};
 
-template <typename Expr, typename State>
-constexpr decltype(auto) evalRightScalarOperand(Expr&& expr, State&& state) {
-  if constexpr (details::is_expression_literal_v<
-                    typename std::decay_t<Expr>::template operand_type<1>>)
-    return expr.template operand<1>()(std::get<1>(state.operands));
-  else
-    return expr.template operand<1>()();
-}
+template <typename Op, typename... States>
+struct is_operand_state<State<Op, States...>> : std::true_type {};
 
-template <typename Expr, typename State>
+template <typename T>
+inline constexpr bool is_operand_state_v = is_operand_state<T>::value;
+
+template <std::size_t Index, typename Expr, typename State>
 constexpr decltype(auto) evalScalarOperand(Expr&& expr, State&& state) {
-  if constexpr (details::is_expression_literal_v<
-                    typename std::decay_t<Expr>::template operand_type<0>>)
-    return expr.template operand<0>()(std::get<0>(state.operands));
-  else
-    return expr.template operand<0>()();
+  const auto& operand = expr.template operand<Index>();
+  const auto& operand_state = std::get<Index>(state.operands);
+  if constexpr (is_operand_state_v<std::decay_t<decltype(operand_state)>>) {
+    return operand(operand_state);
+  } else {
+    return operand();
+  }
 }
 
-template <typename Expr, typename State>
-constexpr decltype(auto) evalLeftMatrixOperand(std::size_t i, std::size_t j,
-                                               Expr&& expr, State&& state) {
-  if constexpr (details::is_expression_literal_v<
-                    typename std::decay_t<Expr>::template operand_type<0>>)
-    return expr.template operand<0>()(i, j, std::get<0>(state.operands));
-  else
-    return expr.template operand<0>()(i, j);
-}
-
-template <typename Expr, typename State>
-constexpr decltype(auto) evalRightMatrixOperand(std::size_t i, std::size_t j,
-                                                Expr&& expr, State&& state) {
-  if constexpr (details::is_expression_literal_v<
-                    typename std::decay_t<Expr>::template operand_type<1>>)
-    return expr.template operand<1>()(i, j, std::get<1>(state.operands));
-  else
-    return expr.template operand<1>()(i, j);
-}
-
-template <typename Expr, typename State>
+template <std::size_t Index, typename Expr, typename State>
 constexpr decltype(auto) evalMatrixOperand(std::size_t i, std::size_t j,
                                            Expr&& expr, State&& state) {
-  if constexpr (details::is_expression_literal_v<
-                    typename std::decay_t<Expr>::template operand_type<0>>)
-    return expr.template operand<0>()(i, j, std::get<0>(state.operands));
-  else
-    return expr.template operand<0>()(i, j);
+  const auto& operand = expr.template operand<Index>();
+  const auto& operand_state = std::get<Index>(state.operands);
+  if constexpr (is_operand_state_v<std::decay_t<decltype(operand_state)>>) {
+    return operand(i, j, operand_state);
+  } else {
+    return operand(i, j);
+  }
 }
 
-struct Addition {
+struct ScalarAddition {
   static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
-    return evalLeftScalarOperand(expr, state) +
-           evalRightScalarOperand(expr, state);
+    return evalScalarOperand<0>(expr, state) +
+           evalScalarOperand<1>(expr, state);
   };
+};
+
+struct Addition {
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
-    return evalLeftMatrixOperand(i, j, expr, state) +
-           evalRightMatrixOperand(i, j, expr, state);
+    return evalMatrixOperand<0>(i, j, expr, state) +
+           evalMatrixOperand<1>(i, j, expr, state);
   };
 };
 struct Subtraction {
   static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
-    return evalLeftScalarOperand(expr, state) -
-           evalRightScalarOperand(expr, state);
+    return evalScalarOperand<0>(expr, state) -
+           evalScalarOperand<1>(expr, state);
   };
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
-    return evalLeftMatrixOperand(i, j, expr, state) -
-           evalRightMatrixOperand(i, j, expr, state);
+    return evalMatrixOperand<0>(i, j, expr, state) -
+           evalMatrixOperand<1>(i, j, expr, state);
   };
 };
 // Matrix multiplication
@@ -451,16 +435,16 @@ struct Multiplication {
     for (std::size_t k = 0;
          k < std::decay_t<decltype(expr.template operand<0>())>::num_cols();
          ++k) {
-      result += evalLeftMatrixOperand(i, k, expr, state) *
-                evalRightMatrixOperand(k, j, expr, state);
+      result += evalMatrixOperand<0>(i, k, expr, state) *
+                evalMatrixOperand<1>(k, j, expr, state);
     }
     return result;
   };
 };
 struct ScalarMultiplication {
   static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
-    return evalLeftScalarOperand(expr, state) *
-           evalRightScalarOperand(expr, state);
+    return evalScalarOperand<0>(expr, state) *
+           evalScalarOperand<1>(expr, state);
   };
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
@@ -471,18 +455,18 @@ struct ScalarMultiplication {
     static_assert(lhs_is_scalar != rhs_is_scalar,
                   "One of the arguments must be a scalar");
     if constexpr (lhs_is_scalar) {
-      return evalLeftScalarOperand(expr, state) *
-             evalRightMatrixOperand(i, j, expr, state);
+      return evalScalarOperand<0>(expr, state) *
+             evalMatrixOperand<1>(i, j, expr, state);
     } else {  // rhs_is_scalar
-      return evalLeftMatrixOperand(i, j, expr, state) *
-             evalRightScalarOperand(expr, state);
+      return evalMatrixOperand<0>(i, j, expr, state) *
+             evalScalarOperand<1>(expr, state);
     }
   };
 };
 struct ScalarDivision {
   static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
-    return evalLeftScalarOperand(expr, state) /
-           evalRightScalarOperand(expr, state);
+    return evalScalarOperand<0>(expr, state) /
+           evalScalarOperand<1>(expr, state);
   };
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
@@ -490,8 +474,8 @@ struct ScalarDivision {
         details::is_scalar_v<decltype(expr.template operand<1>())>;
     static_assert(rhs_is_scalar, "The divisor must be a scalar");
 
-    return evalLeftMatrixOperand(i, j, expr, state) /
-           evalRightScalarOperand(expr, state);
+    return evalMatrixOperand<0>(i, j, expr, state) /
+           evalScalarOperand<1>(expr, state);
   };
 };
 struct DotProduct {
@@ -501,8 +485,8 @@ struct DotProduct {
     for (std::size_t i = 0;
          i < std::decay_t<decltype(expr.template operand<0>())>::num_rows();
          ++i) {
-      result += evalLeftMatrixOperand(i, 0, expr, state) *
-                evalRightMatrixOperand(i, 0, expr, state);
+      result += evalMatrixOperand<0>(i, 0, expr, state) *
+                evalMatrixOperand<1>(i, 0, expr, state);
     }
     return result;
   };
@@ -512,7 +496,7 @@ struct OuterProduct {};
 struct Transpose {
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
-    return evalMatrixOperand(j, i, expr, state);
+    return evalMatrixOperand<0>(j, i, expr, state);
   };
 };
 
@@ -552,8 +536,8 @@ struct Normalization : public details::operation_state_tag {
     state.state.norm = 0;
     for (std::size_t i = 0; i < std::decay_t<Expr>::num_rows(); ++i) {
       for (std::size_t j = 0; j < std::decay_t<Expr>::num_cols(); ++j) {
-        state.state.norm += evalMatrixOperand(i, j, expr, state) *
-                            evalMatrixOperand(i, j, expr, state);
+        const auto& value = evalMatrixOperand<0>(i, j, expr, state);
+        state.state.norm += value * value;
       }
     }
     state.state.norm = sqrt(state.state.norm);
@@ -561,7 +545,7 @@ struct Normalization : public details::operation_state_tag {
 
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
-    return evalMatrixOperand(i, j, expr, state) / state.state.norm;
+    return evalMatrixOperand<0>(i, j, expr, state) / state.state.norm;
   };
 };
 struct ElementWiseOperation {};
@@ -819,67 +803,27 @@ struct ResultNumCols<
 };
 
 namespace details {
+template <std::size_t Index, typename Expr>
+struct is_operand_expression_literal {
+  static constexpr bool value = is_expression_literal_v<
+      typename std::decay_t<Expr>::template operand_type<Index>>;
+};
 
-template <typename Expr, typename = std::void_t<>>
-struct has_left_operand_expression : std::false_type {};
-
-template <typename Expr>
-struct has_left_operand_expression<
-    Expr, std::void_t<typename std::decay_t<Expr>::template operand_type<0>>>
-    : std::conditional_t<
-          is_expression_literal_v<std::decay_t<
-              typename std::decay_t<Expr>::template operand_type<0>>>,
-          std::true_type, std::false_type> {};
-
-template <typename Expr>
-inline constexpr bool has_left_operand_expression_v =
-    has_left_operand_expression<Expr>::value;
-
-template <typename Expr, typename = std::void_t<>>
-struct has_right_operand_expression : std::false_type {};
-
-template <typename Expr>
-struct has_right_operand_expression<
-    Expr, std::void_t<typename std::decay_t<Expr>::template operand_type<1>>>
-    : std::conditional_t<
-          is_expression_literal_v<std::decay_t<
-              typename std::decay_t<Expr>::template operand_type<1>>>,
-          std::true_type, std::false_type> {};
-
-template <typename Expr>
-inline constexpr bool has_right_operand_expression_v =
-    has_right_operand_expression<Expr>::value;
-
-template <typename Expr, typename = std::void_t<>>
-struct has_operand_expression : std::false_type {};
-
-template <typename Expr>
-struct has_operand_expression<
-    Expr, std::void_t<typename std::decay_t<Expr>::template operand_type<0>>>
-    : std::conditional_t<
-          is_expression_literal_v<std::decay_t<
-              typename std::decay_t<Expr>::template operand_type<0>>>,
-          std::true_type, std::false_type> {};
-
-template <typename Expr>
-inline constexpr bool has_operand_expression_v =
-    has_operand_expression<Expr>::value;
-
+template <std::size_t Index, typename Expr>
+inline constexpr bool is_operand_expression_literal_v =
+    is_operand_expression_literal<Index, Expr>::value;
 }  // namespace details
 
 template <typename Expr, typename State>
 constexpr void precompute(const Expr& expr, State& state) {
   static_assert(details::is_expression_literal_v<Expr>,
                 "Expression literal expected");
-  if constexpr (details::has_left_operand_expression_v<Expr>)
+  if constexpr (details::is_operand_expression_literal_v<0, Expr>)
     precompute(expr.template operand<0>(), std::get<0>(state.operands));
-  if constexpr (details::has_right_operand_expression_v<Expr>)
+  if constexpr (details::is_operand_expression_literal_v<1, Expr>)
     precompute(expr.template operand<1>(), std::get<1>(state.operands));
-  if constexpr (details::has_operand_expression_v<Expr>)
-    precompute(expr.template operand<0>(), std::get<0>(state.operands));
-  if constexpr (details::has_operation_state_v<typename Expr::operation_type>) {
+  if constexpr (details::has_operation_state_v<State>)
     Expr::operation_type::precompute(expr, state);
-  }
 }
 
 template <typename Expr, StorageOrder Order = StorageOrder::RowMajor,
@@ -913,17 +857,23 @@ template <typename Op, typename... Operands>
 struct ExpressionValidator;
 
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::Addition, Lhs, Rhs> {
-  using expression_type =
-      std::conditional_t<details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
-                         details::scalar_tag, details::matrix_tag>;
+struct ExpressionValidator<Operation::ScalarAddition, Lhs, Rhs> {
+  using expression_type = details::scalar_tag;
 
-  static_assert(
-      (details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>) ||
-          (details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs> &&
-           std::decay_t<Lhs>::num_rows() == std::decay_t<Rhs>::num_rows() &&
-           std::decay_t<Lhs>::num_cols() == std::decay_t<Rhs>::num_cols()),
-      "Mismatched operands for addition");
+  static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
+                "Mismatched operands for scalar addition");
+};
+
+template <typename Lhs, typename Rhs>
+struct ExpressionValidator<Operation::Addition, Lhs, Rhs> {
+  using expression_type = details::matrix_tag;
+
+  static_assert(details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs> &&
+                    std::decay_t<Lhs>::num_rows() ==
+                        std::decay_t<Rhs>::num_rows() &&
+                    std::decay_t<Lhs>::num_cols() ==
+                        std::decay_t<Rhs>::num_cols(),
+                "Mismatched operands for addition");
 };
 
 template <typename Lhs, typename Rhs>
@@ -932,7 +882,8 @@ struct ExpressionValidator<Operation::Multiplication, Lhs, Rhs> {
 
   static_assert(details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs>,
                 "Matrix multiplication requires matrix operands");
-  static_assert(Lhs::num_cols() == Rhs::num_rows(),
+  static_assert(Lhs::num_cols() == Dynamic || Rhs::num_rows() == Dynamic ||
+                    Lhs::num_cols() == Rhs::num_rows(),
                 "Matrix operand inner dimensions must match");
 };
 
@@ -947,35 +898,45 @@ struct ExpressionValidator<Operation::DotProduct, Lhs, Rhs> {
       "Dot product requires vector operands of the same dimension");
 };
 
-template <typename Op, typename ExprType, typename... Operands>
+template <typename ExprType, typename Op, typename... Operands>
 class ExpressionImpl;
 
 // Partial specialization for matrix_tag
 template <typename Op, typename... Operands>
-class ExpressionImpl<Op, details::matrix_tag, Operands...>
+class ExpressionImpl<details::matrix_tag, Op, Operands...>
     : public details::matrix_tag {
+  using Derived = Expression<Op, Operands...>;
+  constexpr const Derived& derived() const {
+    return static_cast<const Derived&>(*this);
+  }
+  constexpr Derived& derived() { return static_cast<Derived&>(*this); }
+
  public:
+  using state_type = typename Operation::BuildState<Derived>::type;
+  constexpr decltype(auto) operator()(std::size_t i, std::size_t j,
+                                      const state_type& state) const {
+    return Op::apply_matrix(i, j, derived(), state);
+  }
+
   static constexpr std::size_t num_rows() {
     return ResultNumRows<Op, Operands...>::value;
   }
   static constexpr std::size_t num_cols() {
     return ResultNumCols<Op, Operands...>::value;
   }
-
-  using Derived = Expression<Op, Operands...>;
-  using state_type = typename Operation::BuildState<Derived>::type;
-  constexpr decltype(auto) operator()(std::size_t i, std::size_t j,
-                                      const state_type& state) const {
-    return Op::apply_matrix(i, j, static_cast<const Derived&>(*this), state);
-  }
 };
 
 // Partial specialization for scalar_tag
 template <typename Op, typename... Operands>
-class ExpressionImpl<Op, details::scalar_tag, Operands...>
+class ExpressionImpl<details::scalar_tag, Op, Operands...>
     : public details::scalar_tag {
- public:
   using Derived = Expression<Op, Operands...>;
+  constexpr const Derived& derived() const {
+    return static_cast<const Derived&>(*this);
+  }
+  constexpr Derived& derived() { return static_cast<Derived&>(*this); }
+
+ public:
   using state_type = typename Operation::BuildState<Derived>::type;
   constexpr decltype(auto) operator()(const state_type& state) const {
     return Op::apply_scalar(static_cast<const Derived&>(*this), state);
@@ -984,10 +945,9 @@ class ExpressionImpl<Op, details::scalar_tag, Operands...>
 
 template <typename Op, typename... Operands>
 class Expression
-    : public ExpressionImpl<Op,
-                            typename ExpressionValidator<
+    : public ExpressionImpl<typename ExpressionValidator<
                                 Op, std::decay_t<Operands>...>::expression_type,
-                            Operands...> {
+                            Op, Operands...> {
   // The Expression class forwards the deduced ExprType to ExpressionImpl.
  public:
   using value_type = typename ResultValueType<Op, Operands...>::type;
