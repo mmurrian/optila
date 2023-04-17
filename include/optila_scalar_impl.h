@@ -31,9 +31,13 @@ class Scalar : public details::scalar_tag {
   ValueType value_;
 };
 
-template <typename T, typename... Args>
-constexpr Scalar<T> make_scalar(Args&&... args) {
-  return Scalar<T>(std::forward<Args>(args)...);
+template <typename ValueType>
+constexpr Scalar<ValueType> make_scalar(ValueType&& args) {
+  return Scalar<ValueType>(std::forward<ValueType>(args));
 }
+
+// Deduction guide for Scalar
+template <typename ValueType>
+Scalar(ValueType) -> Scalar<ValueType>;
 
 }  // namespace optila

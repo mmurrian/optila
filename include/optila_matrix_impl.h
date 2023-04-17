@@ -16,8 +16,26 @@ class Matrix : public details::matrix_tag {
   constexpr Matrix() = default;
 
   // Constructor for nested-brace syntax
+  template <
+      std::size_t R = NumRows, std::size_t C = NumCols,
+      typename std::enable_if_t<(R != Dynamic) && (C != Dynamic), int> = 0>
+  constexpr Matrix(const ValueType (&init)[R][C]) {
+    static_assert(R == NumRows && C == NumCols,
+                  "Static matrix initialization must match matrix size");
+    std::size_t i = 0;
+    for (const auto& row : init) {
+      std::size_t j = 0;
+      for (const auto& elem : row) {
+        (*this)(i, j++) = elem;
+      }
+      ++i;
+    }
+  }
+
+  // Constructor for dynamic-sized matrices
   constexpr Matrix(
       std::initializer_list<std::initializer_list<value_type>> init) {
+    // Constructor implementation for dynamic-sized matrices
     if constexpr (num_rows_static() == Dynamic ||
                   num_cols_static() == Dynamic) {
       const std::size_t num_rows = init.size();
@@ -102,5 +120,16 @@ class Matrix : public details::matrix_tag {
     }
   }
 };
+
+// Deduction guide for Matrix
+template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
+Matrix(const ValueType (&)[NumRows][NumCols])
+    -> Matrix<ValueType, NumRows, NumCols>;
+
+template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
+constexpr decltype(auto) make_matrix(
+    std::initializer_list<std::initializer_list<ValueType>> init) {
+  return Matrix<ValueType, NumRows, NumCols>(init);
+}
 
 }  // namespace optila

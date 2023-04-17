@@ -8,6 +8,16 @@ target_include_directories(
   OPTiLA INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                    $<INSTALL_INTERFACE:include>)
 
+option(OPTILA_ENABLE_IMPLICIT_CONVERSIONS
+       "Enable implicit conversions when evaluating OPTiLA expressions" OFF)
+if(OPTILA_ENABLE_IMPLICIT_CONVERSIONS)
+  message(STATUS "OPTiLA: Implicit conversions enabled")
+  target_compile_definitions(OPTiLA
+                             INTERFACE OPTILA_ENABLE_IMPLICIT_CONVERSIONS)
+else()
+  message(STATUS "OPTiLA: Implicit conversions disabled")
+endif()
+
 # Set C++17 standard for the OPTiLA target
 target_compile_features(OPTiLA INTERFACE cxx_std_17)
 

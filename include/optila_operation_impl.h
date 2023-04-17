@@ -3,6 +3,7 @@
 #include <tuple>
 
 #include "details/optila_expression.h"
+#include "details/optila_matrix.h"
 #include "details/optila_operation.h"
 
 namespace optila::Operation {
@@ -88,11 +89,13 @@ struct Addition {
            evalMatrixOperand<1>(i, j, expr, state);
   };
 };
-struct Subtraction {
+struct ScalarSubtraction {
   static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
     return evalScalarOperand<0>(expr, state) -
            evalScalarOperand<1>(expr, state);
   };
+};
+struct Subtraction {
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
     return evalMatrixOperand<0>(i, j, expr, state) -
@@ -105,9 +108,19 @@ struct Multiplication {
                                           auto&& expr, auto&& state) {
     using value_type = typename std::decay_t<decltype(expr)>::value_type;
     value_type result = 0;
-    for (std::size_t k = 0; k < expr.template operand<0>().num_cols(); ++k) {
-      result += evalMatrixOperand<0>(i, k, expr, state) *
-                evalMatrixOperand<1>(k, j, expr, state);
+    if constexpr (details::is_matrix_v<decltype(expr.template operand<0>())> &&
+                  details::is_matrix_v<decltype(expr.template operand<1>())>) {
+      for (std::size_t k = 0; k < expr.template operand<0>().num_cols(); ++k) {
+        result += evalMatrixOperand<0>(i, k, expr, state) *
+                  evalMatrixOperand<1>(k, j, expr, state);
+      }
+    } else if constexpr (details::is_matrix_v<
+                             decltype(expr.template operand<0>())>) {
+      result = evalMatrixOperand<0>(i, j, expr, state) *
+               evalScalarOperand<1>(expr, state);
+    } else {  // details::is_matrix_v<decltype(expr.template operand<1>())>
+      result = evalScalarOperand<0>(expr, state) *
+               evalMatrixOperand<1>(i, j, expr, state);
     }
     return result;
   };
@@ -116,22 +129,6 @@ struct ScalarMultiplication {
   static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
     return evalScalarOperand<0>(expr, state) *
            evalScalarOperand<1>(expr, state);
-  };
-  static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
-                                          auto&& expr, auto&& state) {
-    constexpr bool lhs_is_scalar =
-        details::is_scalar_v<decltype(expr.template operand<0>())>;
-    constexpr bool rhs_is_scalar =
-        details::is_scalar_v<decltype(expr.template operand<1>())>;
-    static_assert(lhs_is_scalar != rhs_is_scalar,
-                  "One of the arguments must be a scalar");
-    if constexpr (lhs_is_scalar) {
-      return evalScalarOperand<0>(expr, state) *
-             evalMatrixOperand<1>(i, j, expr, state);
-    } else {  // rhs_is_scalar
-      return evalMatrixOperand<0>(i, j, expr, state) *
-             evalScalarOperand<1>(expr, state);
-    }
   };
 };
 struct ScalarDivision {
@@ -217,6 +214,39 @@ struct Normalization : public details::operation_state_tag {
   };
 };
 struct ElementWiseOperation {};
+
+struct StrictEquality {
+  static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
+    using Lhs = std::decay_t<decltype(expr.template operand<0>())>;
+    using Rhs = std::decay_t<decltype(expr.template operand<1>())>;
+    if constexpr (details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs>) {
+      for (std::size_t i = 0; i < expr.template operand<0>().num_rows(); ++i) {
+        for (std::size_t j = 0; j < expr.template operand<0>().num_cols();
+             ++j) {
+          if (evalMatrixOperand<0>(i, j, expr, state) !=
+              evalMatrixOperand<1>(i, j, expr, state)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    } else {
+      return evalScalarOperand<0>(expr, state) ==
+             evalScalarOperand<1>(expr, state);
+    }
+  };
+};
+
+template <typename FromType, typename ToType>
+struct StaticConversion {
+  static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
+    return static_cast<ToType>(evalScalarOperand<0>(expr, state));
+  };
+  static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
+                                          auto&& expr, auto&& state) {
+    return static_cast<ToType>(evalMatrixOperand<0>(i, j, expr, state));
+  };
+};
 
 // Fill a matrix with a constant value
 template <std::size_t NumRows, std::size_t NumCols>

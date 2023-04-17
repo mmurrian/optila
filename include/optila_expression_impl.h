@@ -72,7 +72,7 @@ class Expression
   // The Expression class forwards the deduced ExprType to ExpressionImpl.
  public:
   using value_type =
-      std::common_type_t<typename std::decay_t<Operands>::value_type...>;
+      typename ExpressionValidator<Op, std::decay_t<Operands>...>::value_type;
   using operation_type = Op;
   template <std::size_t index>
   using operand_type =

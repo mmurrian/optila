@@ -76,4 +76,12 @@ constexpr auto normalize(Lhs&& vec) {
   return Expression<Operation::Normalization, Lhs>(std::forward<Lhs>(vec));
 }
 
+// Static type cast operation
+template <typename ToType, typename Lhs>
+constexpr auto static_convert(Lhs&& mat) {
+  using FromType = typename std::decay_t<Lhs>::value_type;
+  return Expression<Operation::StaticConversion<FromType, ToType>, Lhs>(
+      std::forward<Lhs>(mat));
+}
+
 }  // namespace optila
