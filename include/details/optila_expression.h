@@ -88,5 +88,24 @@ template <typename Lhs, typename Rhs>
 inline constexpr bool is_binary_scalar_pair_v =
     is_binary_scalar_pair<Lhs, Rhs>::value;
 
+template <typename Lhs>
+struct is_static_expression
+    : std::conditional_t<std::decay_t<Lhs>::num_rows_static() != Dynamic &&
+                             std::decay_t<Lhs>::num_cols_static() != Dynamic,
+                         std::true_type, std::false_type> {};
+
+template <typename Lhs>
+inline constexpr bool is_static_expression_v = is_static_expression<Lhs>::value;
+
+template <typename Lhs>
+struct is_dynamic_expression
+    : std::conditional_t<std::decay_t<Lhs>::num_rows_static() == Dynamic ||
+                             std::decay_t<Lhs>::num_cols_static() == Dynamic,
+                         std::true_type, std::false_type> {};
+
+template <typename Lhs>
+inline constexpr bool is_dynamic_expression_v =
+    is_dynamic_expression<Lhs>::value;
+
 }  // namespace details
 }  // namespace optila

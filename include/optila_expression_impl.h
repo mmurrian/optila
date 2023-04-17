@@ -1,9 +1,9 @@
 #pragma once
 
 #include "details/optila_expression.h"
+#include "details/optila_type_traits.h"
 #include "optila_expression_validator_impl.h"
 #include "optila_operation_impl.h"
-#include "optila_result_helpers.h"
 
 namespace optila {
 
@@ -28,10 +28,22 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
   }
 
   static constexpr std::size_t num_rows_static() {
-    return ResultNumRows<Op, Operands...>::value;
+    return ExpressionValidator<Op,
+                               std::decay_t<Operands>...>::num_rows_static();
   }
   static constexpr std::size_t num_cols_static() {
-    return ResultNumCols<Op, Operands...>::value;
+    return ExpressionValidator<Op,
+                               std::decay_t<Operands>...>::num_cols_static();
+  }
+  [[nodiscard]] constexpr std::size_t num_rows() const {
+    return std::apply(
+        ExpressionValidator<Op, std::decay_t<Operands>...>::num_rows,
+        derived().operands());
+  }
+  [[nodiscard]] constexpr std::size_t num_cols() const {
+    return std::apply(
+        ExpressionValidator<Op, std::decay_t<Operands>...>::num_cols,
+        derived().operands());
   }
 };
 
@@ -59,14 +71,25 @@ class Expression
                             Op, Operands...> {
   // The Expression class forwards the deduced ExprType to ExpressionImpl.
  public:
-  using value_type = typename ResultValueType<Op, Operands...>::type;
+  using value_type =
+      std::common_type_t<typename std::decay_t<Operands>::value_type...>;
   using operation_type = Op;
   template <std::size_t index>
   using operand_type =
       std::tuple_element_t<index, std::tuple<std::decay_t<Operands>...>>;
 
   constexpr explicit Expression(Operands&&... operands)
-      : operands_(std::forward<Operands>(operands)...) {}
+      : operands_(std::forward<Operands>(operands)...) {
+    using Validator = ExpressionValidator<Op, std::decay_t<Operands>...>;
+    if constexpr (std::conjunction_v<
+                      details::is_static_expression<Operands>...>) {
+      Validator::static_validate();
+    } else {
+      std::apply(Validator::dynamic_validate, operands_);
+    }
+  }
+
+  constexpr const auto& operands() const { return operands_; }
 
   template <std::size_t index>
   constexpr const auto& operand() const {

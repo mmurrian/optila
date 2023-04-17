@@ -105,10 +105,7 @@ struct Multiplication {
                                           auto&& expr, auto&& state) {
     using value_type = typename std::decay_t<decltype(expr)>::value_type;
     value_type result = 0;
-    for (std::size_t k = 0;
-         k <
-         std::decay_t<decltype(expr.template operand<0>())>::num_cols_static();
-         ++k) {
+    for (std::size_t k = 0; k < expr.template operand<0>().num_cols(); ++k) {
       result += evalMatrixOperand<0>(i, k, expr, state) *
                 evalMatrixOperand<1>(k, j, expr, state);
     }
@@ -156,10 +153,7 @@ struct DotProduct {
   static constexpr auto apply_scalar = [](auto&& expr, auto&& state) {
     using value_type = typename std::decay_t<decltype(expr)>::value_type;
     value_type result = 0;
-    for (std::size_t i = 0;
-         i <
-         std::decay_t<decltype(expr.template operand<0>())>::num_rows_static();
-         ++i) {
+    for (std::size_t i = 0; i < expr.template operand<0>().num_rows(); ++i) {
       result += evalMatrixOperand<0>(i, 0, expr, state) *
                 evalMatrixOperand<1>(i, 0, expr, state);
     }
@@ -186,8 +180,7 @@ template <std::size_t StartRow, std::size_t StartCol, std::size_t NumRows,
 struct SubmatrixExtraction {
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr, auto&& state) {
-    return expr.template operand<0>()(i + StartRow, j + StartCol,
-                                      std::get<0>(state.operands));
+    return evalMatrixOperand<0>(i + StartRow, j + StartCol, expr, state);
   };
 };
 struct Concatenation {};
@@ -209,8 +202,8 @@ struct Normalization : public details::operation_state_tag {
     // TODO: Ideally, this could be implemented after Expression and 'evaluate'
     // so that we can use the Norm operation on expr.template operand<0>().
     state.state.norm = 0;
-    for (std::size_t i = 0; i < std::decay_t<Expr>::num_rows_static(); ++i) {
-      for (std::size_t j = 0; j < std::decay_t<Expr>::num_cols_static(); ++j) {
+    for (std::size_t i = 0; i < expr.num_rows(); ++i) {
+      for (std::size_t j = 0; j < expr.num_cols(); ++j) {
         const auto& value = evalMatrixOperand<0>(i, j, expr, state);
         state.state.norm += value * value;
       }
@@ -247,33 +240,14 @@ struct DiagonalFromVector {
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr) {
     using value_type = typename std::decay_t<decltype(expr)>::value_type;
-    constexpr bool lhs_is_row_vector =
-        details::is_row_vector_v<decltype(expr.template operand<0>())>;
-    constexpr bool lhs_is_column_vector =
-        details::is_column_vector_v<decltype(expr.template operand<0>())>;
-    static_assert(lhs_is_row_vector != lhs_is_column_vector,
-                  "The operand must be a vector");
-    if constexpr (lhs_is_row_vector) {
-      return i == j ? expr.template operand<0>()(0, j) : value_type{};
-    } else if constexpr (lhs_is_column_vector) {
-      return i == j ? expr.template operand<0>()(i, 0) : value_type{};
-    }
+    return i == j ? expr.template operand<0>()(i, 0) : value_type{};
   };
 };
 // Extract the diagonal of a matrix into a vector
 struct DiagonalToVector {
   static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
                                           auto&& expr) {
-    constexpr bool is_row_vector = details::is_row_vector_v<decltype(expr)>;
-    constexpr bool is_column_vector =
-        details::is_column_vector_v<decltype(expr)>;
-    static_assert(is_row_vector != is_column_vector,
-                  "The result must be a vector");
-    if constexpr (is_row_vector) {
-      return expr.template operand<0>()(j, j);
-    } else if constexpr (is_column_vector) {
-      return expr.template operand<0>()(i, i);
-    }
+    return expr.template operand<0>()(i, i);
   };
 };
 // Extract the diagonal of a matrix into a diagonal matrix
