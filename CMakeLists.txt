@@ -58,7 +58,6 @@ install(
         include/details/optila_type_traits.h
         include/details/optila_scalar.h
         include/details/optila_expression.h
-        include/details/optila_operation.h
         include/optila_matrix_impl.h
         include/optila_scalar_impl.h
         include/optila_expression_impl.h

@@ -57,13 +57,18 @@ int other_tests() {
   static_assert(static_B.num_rows() == 3);
   static_assert(static_B.num_cols() == 3);
 
-  static constexpr auto static_C = optila::evaluate(static_A + static_B);
-  static constexpr auto static_D = optila::evaluate(static_A - static_B);
-  static constexpr auto static_E = optila::evaluate(static_A * static_B);
+  static constexpr optila::Matrix static_C =
+      optila::evaluate(static_A + static_B);
+  static constexpr optila::Matrix static_D =
+      optila::evaluate(static_A - static_B);
+  static constexpr optila::Matrix static_E =
+      optila::evaluate(static_A * static_B);
   static constexpr auto static_scalar = optila::make_scalar<double>(30.0);
 
-  static constexpr auto static_F = optila::evaluate(static_scalar * static_A);
-  static constexpr auto static_G = optila::evaluate(static_A * static_scalar);
+  static constexpr optila::Matrix static_F =
+      optila::evaluate(static_scalar * static_A);
+  static constexpr optila::Matrix static_G =
+      optila::evaluate(static_A * static_scalar);
 
   static_assert(static_C ==
                 decltype(static_C){{{10, 10, 10}, {10, 10, 10}, {10, 10, 10}}});
@@ -102,7 +107,7 @@ int dynamic_tests() {
   assert(D(1, 0) == 32);
   assert(D(2, 0) == 50);
 
-  auto E = optila::evaluate(optila::dot(b, b));
+  optila::Scalar E = optila::evaluate(optila::dot(b, b));
   assert(E == 14);
 
   auto F = optila::evaluate(C + b);
@@ -117,6 +122,13 @@ int dynamic_tests() {
   assert(H(0, 1) == 6);
   assert(H(1, 0) == 8);
   assert(H(1, 1) == 9);
+
+  optila::Scalar bNorm = optila::evaluate(optila::norm(b));
+  assert(bNorm == 3.7416573867739413);
+  auto I = optila::normalize(b);
+  assert(I(0, 0) == 0.2672612419124244);
+  assert(I(1, 0) == 0.5345224838248488);
+  assert(I(2, 0) == 0.8017837257372732);
 
   return 0;
 }
@@ -138,7 +150,7 @@ int constexpr_tests() {
   static_assert(D(1, 0) == 32);
   static_assert(D(2, 0) == 50);
 
-  static constexpr auto E = optila::evaluate(optila::dot(b, b));
+  static constexpr optila::Scalar E = optila::evaluate(optila::dot(b, b));
   static_assert(E == 14);
 
   static constexpr auto F =

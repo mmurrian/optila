@@ -72,9 +72,9 @@ constexpr auto operator/(Lhs&& lhs, Rhs&& rhs) {
 template <typename Lhs, typename Rhs,
           typename = std::enable_if_t<details::is_expression_v<Lhs> &&
                                       details::is_expression_v<Rhs>>>
-constexpr auto operator==(Lhs&& lhs, Rhs&& rhs) {
+constexpr bool operator==(Lhs&& lhs, Rhs&& rhs) {
   return evaluate(Expression<Operation::StrictEquality, Lhs, Rhs>(
-      std::forward<Lhs>(lhs), std::forward<Rhs>(rhs)));
+      std::forward<Lhs>(lhs), std::forward<Rhs>(rhs)))();
 }
 
 }  // namespace optila

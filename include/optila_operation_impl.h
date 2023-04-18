@@ -199,4 +199,14 @@ struct DiagonalMatrix {
   };
 };
 
+struct Evaluate {
+  static constexpr auto apply_scalar = [](auto&& expr) {
+    return expr.template operand<0>()();
+  };
+  static constexpr auto apply_matrix = [](std::size_t i, std::size_t j,
+                                          auto&& expr) {
+    return expr.template operand<0>()(i, j);
+  };
+};
+
 }  // namespace optila::Operation

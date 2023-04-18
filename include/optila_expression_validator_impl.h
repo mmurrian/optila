@@ -228,6 +228,19 @@ struct ExpressionValidator<Operation::SquareRoot, Lhs> {
   static constexpr void dynamic_validate(const Lhs& /*lhs*/) {}
 };
 
+template <typename Op, typename... Operands>
+struct ExpressionValidator<Operation::Evaluate, Expression<Op, Operands...>> {
+  using Lhs = Expression<Op, Operands...>;
+  using expression_type =
+      typename ExpressionValidator<Op,
+                                   std::decay_t<Operands>...>::expression_type;
+  using value_type = details::result_type_t<typename Lhs::value_type>;
+
+  static constexpr void static_validate() {}
+
+  static constexpr void dynamic_validate(const Lhs& /*lhs*/) {}
+};
+
 // Submatrix extraction
 template <std::size_t StartRow, std::size_t StartCol, std::size_t NumRows,
           std::size_t NumCols, typename Lhs>

@@ -84,21 +84,9 @@ constexpr auto static_convert(Lhs&& mat) {
       std::forward<Lhs>(mat));
 }
 
-// Matrix expression evaluation
-template <typename Expr, StorageOrder Order = StorageOrder::RowMajor,
-          typename = std::enable_if_t<details::is_matrix_v<Expr>>>
-constexpr auto evaluate(const Expr& expr) {
-  using ResultType = Matrix<typename Expr::value_type, Expr::num_rows_static(),
-                            Expr::num_cols_static(), Order>;
-  return static_cast<ResultType>(expr);
-}
-
-// Scalar expression evaluation
-template <typename Expr,
-          typename = std::enable_if_t<details::is_scalar_v<Expr>>>
-constexpr decltype(auto) evaluate(const Expr& expr) {
-  using ResultType = Scalar<typename Expr::value_type>;
-  return ResultType(expr)();
+template <typename Lhs>
+constexpr decltype(auto) evaluate(Lhs&& expr) {
+  return Expression<Operation::Evaluate, Lhs>(std::forward<Lhs>(expr));
 }
 
 }  // namespace optila

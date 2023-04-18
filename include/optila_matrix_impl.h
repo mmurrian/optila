@@ -155,6 +155,11 @@ template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 Matrix(const ValueType (&)[NumRows][NumCols])
     -> Matrix<ValueType, NumRows, NumCols>;
 
+template <typename Expr,
+          typename = std::enable_if_t<details::is_matrix_v<Expr>>>
+Matrix(Expr&& expr) -> Matrix<typename Expr::value_type,
+                              Expr::num_rows_static(), Expr::num_cols_static()>;
+
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 constexpr decltype(auto) make_matrix(
     const ValueType (&from)[NumRows][NumCols]) {
