@@ -66,6 +66,5 @@ install(
         include/optila_operation_impl.h
         include/optila_wrapper_free_functions.h
         include/optila_wrapper_operator_overloads.h
-        include/optila_evaluate_impl.h
         include/optila_wrapper_aliases.h
   DESTINATION include)

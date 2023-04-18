@@ -1,6 +1,5 @@
 #pragma once
 
-#include "optila_evaluate_impl.h"
 #include "optila_expression_impl.h"
 #include "optila_matrix_impl.h"
 #include "optila_scalar_impl.h"

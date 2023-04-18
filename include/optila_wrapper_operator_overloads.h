@@ -2,7 +2,6 @@
 
 #include <type_traits>
 
-#include "optila_evaluate_impl.h"
 #include "optila_expression_impl.h"
 #include "optila_operation_impl.h"
 

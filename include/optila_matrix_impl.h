@@ -7,6 +7,58 @@
 
 namespace optila {
 
+namespace details {
+template <typename From, typename To>
+constexpr static void assign_matrix_to_matrix(const From& from, To& to) {
+  static_assert(
+      std::is_same_v<
+          result_type_t<typename From::value_type, typename To::value_type>,
+          typename From::value_type>,
+      "Cannot assign incompatible types to matrix");
+  if constexpr (To::num_rows_static() == Dynamic ||
+                To::num_cols_static() == Dynamic) {
+    to.resize(from.num_rows(), from.num_cols());
+  } else {
+    static_assert((From::num_rows_static() == To::num_rows_static() ||
+                   From::num_rows_static() == Dynamic) &&
+                      (From::num_cols_static() == To::num_cols_static() ||
+                       From::num_cols_static() == Dynamic),
+                  "Cannot assign to static matrix with different size");
+    assert(from.num_rows() == to.num_rows() &&
+           from.num_cols() == to.num_cols());
+  }
+  for (std::size_t i = 0; i < to.num_rows(); ++i) {
+    for (std::size_t j = 0; j < to.num_cols(); ++j) {
+      to(i, j) = from(i, j);
+    }
+  }
+}
+
+template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
+          typename To>
+constexpr static void assign_array_2d_to_matrix(
+    const ValueType (&from)[NumRows][NumCols], To& to) {
+  if constexpr (To::num_rows_static() == Dynamic ||
+                To::num_cols_static() == Dynamic) {
+    to.resize(NumRows, NumCols);
+  } else {
+    static_assert(
+        NumRows == To::num_rows_static() && NumCols == To::num_cols_static(),
+        "Static matrix initialization must match matrix size");
+  }
+
+  std::size_t i = 0;
+  for (const auto& row : from) {
+    std::size_t j = 0;
+    for (const auto& elem : row) {
+      to(i, j++) = elem;
+    }
+    ++i;
+  }
+}
+
+}  // namespace details
+
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           StorageOrder Order = StorageOrder::RowMajor>
 class Matrix : public details::matrix_tag {
@@ -19,38 +71,15 @@ class Matrix : public details::matrix_tag {
   template <
       std::size_t R = NumRows, std::size_t C = NumCols,
       typename std::enable_if_t<(R != Dynamic) && (C != Dynamic), int> = 0>
-  constexpr Matrix(const ValueType (&init)[R][C]) {
-    static_assert(R == NumRows && C == NumCols,
-                  "Static matrix initialization must match matrix size");
-    std::size_t i = 0;
-    for (const auto& row : init) {
-      std::size_t j = 0;
-      for (const auto& elem : row) {
-        (*this)(i, j++) = elem;
-      }
-      ++i;
-    }
+  constexpr Matrix(const ValueType (&from)[R][C]) {
+    details::assign_array_2d_to_matrix(from, *this);
   }
 
-  // Constructor for dynamic-sized matrices
-  constexpr Matrix(
-      std::initializer_list<std::initializer_list<value_type>> init) {
-    // Constructor implementation for dynamic-sized matrices
-    if constexpr (num_rows_static() == Dynamic ||
-                  num_cols_static() == Dynamic) {
-      const std::size_t num_rows = init.size();
-      const std::size_t num_cols = init.begin()->size();
-      resize(num_rows, num_cols);
-    }
-
-    std::size_t i = 0;
-    for (const auto& row : init) {
-      std::size_t j = 0;
-      for (const auto& elem : row) {
-        (*this)(i, j++) = elem;
-      }
-      ++i;
-    }
+  template <typename OtherValueType, std::size_t OtherNumRows,
+            std::size_t OtherNumCols, StorageOrder OtherOrder>
+  constexpr Matrix(const Matrix<OtherValueType, OtherNumRows, OtherNumCols,
+                                OtherOrder>& other) {
+    details::assign_matrix_to_matrix(other, *this);
   }
 
   [[nodiscard]] constexpr value_type& operator()(std::size_t i, std::size_t j) {
@@ -128,8 +157,8 @@ Matrix(const ValueType (&)[NumRows][NumCols])
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 constexpr decltype(auto) make_matrix(
-    std::initializer_list<std::initializer_list<ValueType>> init) {
-  return Matrix<ValueType, NumRows, NumCols>(init);
+    const ValueType (&from)[NumRows][NumCols]) {
+  return Matrix<ValueType, NumRows, NumCols>(from);
 }
 
 }  // namespace optila

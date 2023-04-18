@@ -1,7 +1,19 @@
 #include <cassert>
 
 #include "optila.h"
-#include "optila_wrapper_free_functions.h"
+
+int assignment_tests() {
+  optila::Matrix<double, optila::Dynamic, 3> A =
+      optila::Matrix<double, 3, 3>{{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}};
+  assert(A.num_rows() == 3);
+  assert(A.num_cols() == 3);
+
+  optila::Matrix<double, 3, 3> B = A;
+
+  optila::Matrix<double, 3, 3> C = A * B;
+
+  return 0;
+}
 
 int other_tests() {
   // Dynamically allocated matrices
@@ -76,7 +88,7 @@ int dynamic_tests() {
   assert(A.num_rows() == 3);
   assert(A.num_cols() == 3);
 
-  optila::Matrix<double, optila::Dynamic, optila::Dynamic> b{{1}, {2}, {3}};
+  optila::Matrix<double, optila::Dynamic, optila::Dynamic> b{{{1}, {2}, {3}}};
   assert(b.num_rows() == 3);
   assert(b.num_cols() == 1);
 
@@ -151,5 +163,6 @@ int main(int argc, char *argv[]) {
   retval -= dynamic_tests();
   retval -= constexpr_tests();
   retval -= other_tests();
+  retval -= assignment_tests();
   return retval;
 }
