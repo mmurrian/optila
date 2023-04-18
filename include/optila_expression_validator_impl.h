@@ -157,10 +157,36 @@ struct ExpressionValidator<Operation::ScalarMultiplication, Lhs, Rhs> {
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
 
-  static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
-                "Mismatched operands for scalar multiplication");
+  static constexpr void static_validate() {
+    static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
+                  "Mismatched operands for scalar multiplication");
+  }
 
-  static constexpr void static_validate() {}
+  static constexpr void dynamic_validate(const Lhs& lhs, const Rhs& rhs) {}
+};
+
+template <typename Lhs, typename Rhs>
+struct ExpressionValidator<Operation::MatrixScalarDivision, Lhs, Rhs> {
+  using expression_type = details::matrix_tag;
+  using value_type = details::result_type_t<typename Lhs::value_type,
+                                            typename Rhs::value_type>;
+
+  static constexpr auto num_rows_static() { return Lhs::num_rows_static(); }
+
+  static constexpr auto num_cols_static() { return Lhs::num_cols_static(); }
+
+  static constexpr auto num_rows(const Lhs& lhs, const Rhs& /*rhs*/) {
+    return lhs.num_rows();
+  }
+
+  static constexpr auto num_cols(const Lhs& lhs, const Rhs& /*rhs*/) {
+    return lhs.num_cols();
+  }
+
+  static constexpr void static_validate() {
+    static_assert(details::is_matrix_v<Lhs> && details::is_scalar_v<Rhs>,
+                  "Mismatched operands for matrix-scalar division");
+  }
 
   static constexpr void dynamic_validate(const Lhs& lhs, const Rhs& rhs) {}
 };
@@ -186,6 +212,20 @@ struct ExpressionValidator<Operation::DotProduct, Lhs, Rhs> {
            lhs.num_cols() == rhs.num_cols());
     assert(std::min(lhs.num_rows(), lhs.num_cols()) == 1);
   }
+};
+
+// Square root of a scalar
+template <typename Lhs>
+struct ExpressionValidator<Operation::SquareRoot, Lhs> {
+  using expression_type = details::scalar_tag;
+  using value_type = details::result_type_t<typename Lhs::value_type>;
+
+  static_assert(details::is_scalar_v<Lhs>,
+                "Square root requires a scalar operand");
+
+  static constexpr void static_validate() {}
+
+  static constexpr void dynamic_validate(const Lhs& /*lhs*/) {}
 };
 
 // Submatrix extraction

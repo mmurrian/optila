@@ -73,7 +73,7 @@ constexpr auto norm(Lhs&& vec) {
 // Vector normalization operation
 template <typename Lhs>
 constexpr auto normalize(Lhs&& vec) {
-  return Expression<Operation::Normalization, Lhs>(std::forward<Lhs>(vec));
+  return vec / norm(vec);
 }
 
 // Static type cast operation

@@ -9,24 +9,6 @@
 
 namespace optila {
 
-namespace details {
-template <typename Expr, typename State>
-constexpr void precompute(const Expr& expr, State& state) {
-  static_assert(details::is_expression_literal_v<Expr>,
-                "Expression literal expected");
-  if constexpr (Expr::num_operands() > 0)
-    if constexpr (details::is_operand_expression_literal_v<0, Expr>)
-      precompute(expr.template operand<0>(), std::get<0>(state.operands));
-  if constexpr (Expr::num_operands() > 1)
-    if constexpr (details::is_operand_expression_literal_v<1, Expr>)
-      precompute(expr.template operand<1>(), std::get<1>(state.operands));
-  static_assert(Expr::num_operands() <= 2,
-                "Only expressions with up to 2 operands are supported");
-  if constexpr (details::has_operation_state_v<State>)
-    Expr::operation_type::precompute(expr, state);
-}
-}  // namespace details
-
 template <typename ExprType, typename Op, typename... Operands>
 class ExpressionImpl;
 
@@ -43,10 +25,8 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
  public:
   using value_type =
       typename ExpressionValidator<Op, std::decay_t<Operands>...>::value_type;
-  using state_type = typename Operation::BuildState<Derived>::type;
-  constexpr decltype(auto) operator()(std::size_t i, std::size_t j,
-                                      const state_type& state) const {
-    return Op::apply_matrix(i, j, derived(), state);
+  constexpr decltype(auto) operator()(std::size_t i, std::size_t j) const {
+    return Op::apply_matrix(i, j, derived());
   }
 
   static constexpr std::size_t num_rows_static() {
@@ -84,9 +64,6 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
             Derived::num_cols_static() == Dynamic,
         "Static column count mismatch between expression and result matrix");
 
-    state_type state{};
-    details::precompute(derived(), state);
-
     using ResultType = Matrix<value_type, NumRows, NumCols, Order>;
     ResultType result{};
     if constexpr (details::is_dynamic_expression_v<ResultType>) {
@@ -97,7 +74,7 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
     }
     for (std::size_t i = 0; i < result.num_rows(); ++i) {
       for (std::size_t j = 0; j < result.num_cols(); ++j) {
-        result(i, j) = derived()(i, j, state);
+        result(i, j) = derived()(i, j);
       }
     }
     return result;
@@ -117,9 +94,8 @@ class ExpressionImpl<details::scalar_tag, Op, Operands...>
  public:
   using value_type =
       typename ExpressionValidator<Op, std::decay_t<Operands>...>::value_type;
-  using state_type = typename Operation::BuildState<Derived>::type;
-  constexpr decltype(auto) operator()(const state_type& state) const {
-    return Op::apply_scalar(static_cast<const Derived&>(*this), state);
+  constexpr decltype(auto) operator()() const {
+    return Op::apply_scalar(derived());
   }
 
   template <typename ValueType>
@@ -129,10 +105,7 @@ class ExpressionImpl<details::scalar_tag, Op, Operands...>
                                  ValueType>,
                   "Incompatible value types");
 
-    state_type state{};
-    details::precompute(derived(), state);
-
-    return Scalar<ValueType>(derived()(state));
+    return Scalar<ValueType>(derived()());
   }
 };
 

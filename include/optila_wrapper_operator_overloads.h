@@ -52,13 +52,20 @@ constexpr auto operator*(Lhs&& lhs, Rhs&& rhs) {
   }
 }
 
-// Scalar division operation
+// Matrix-Scalar or Scalar division operation
 template <typename Lhs, typename Rhs,
           typename = std::enable_if_t<details::is_expression_v<Lhs> &&
                                       details::is_expression_v<Rhs>>>
 constexpr auto operator/(Lhs&& lhs, Rhs&& rhs) {
-  return Expression<Operation::ScalarDivision, Lhs, Rhs>(
-      std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
+  if constexpr (details::is_matrix_v<Lhs> && details::is_scalar_v<Rhs>) {
+    // Matrix-Scalar division operation
+    return Expression<Operation::MatrixScalarDivision, Lhs, Rhs>(
+        std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
+  } else {
+    // Scalar division operation
+    return Expression<Operation::ScalarDivision, Lhs, Rhs>(
+        std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
+  }
 }
 
 // Strict equality operation
