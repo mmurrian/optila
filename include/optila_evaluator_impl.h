@@ -76,10 +76,13 @@ class Evaluator<
 
   template <typename OtherValueType>
   constexpr void evaluate_into(Scalar<OtherValueType>& dest) const {
-    using CommonValueType =
-        details::common_value_type_t<typename ExprTraits::value_type,
-                                     OtherValueType>;
-    dest = Scalar<OtherValueType>((*this)());
+#ifndef OPTILA_ENABLE_IMPLICIT_CONVERSIONS
+    static_assert(
+        std::is_same_v<typename ExprTraits::value_type, OtherValueType>,
+        "Implicit conversions are disabled. Use explicit conversions to "
+        "convert between types.");
+#endif
+    dest = Scalar<OtherValueType>(static_cast<OtherValueType>((*this)()));
   }
 };
 
