@@ -2,6 +2,7 @@
 
 #include "optila_matrix.h"
 #include "optila_scalar.h"
+#include "optila_type_traits.h"
 
 namespace optila {
 

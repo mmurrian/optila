@@ -86,7 +86,14 @@ constexpr auto static_convert(Lhs&& mat) {
 
 template <typename Lhs>
 constexpr decltype(auto) evaluate(Lhs&& expr) {
-  return Expression<Operation::Evaluate, Lhs>(std::forward<Lhs>(expr));
+  return Expression<Operation::Evaluate<Operation::eager_evaluation_t>, Lhs>(
+      std::forward<Lhs>(expr));
+}
+
+template <typename Lhs>
+constexpr decltype(auto) lazyEvaluate(Lhs&& expr) {
+  return Expression<Operation::Evaluate<Operation::lazy_evaluation_t>, Lhs>(
+      std::forward<Lhs>(expr));
 }
 
 }  // namespace optila

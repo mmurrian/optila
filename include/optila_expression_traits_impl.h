@@ -9,10 +9,11 @@
 
 namespace optila {
 template <typename Op, typename... Operands>
-struct ExpressionValidator;
+struct ExpressionTraits;
 
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::ScalarAddition, Lhs, Rhs> {
+struct ExpressionTraits<Operation::ScalarAddition, Lhs, Rhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -22,8 +23,8 @@ struct ExpressionValidator<Operation::ScalarAddition, Lhs, Rhs> {
 };
 
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::Addition, Lhs, Rhs>
-    : details::matrix_tag {
+struct ExpressionTraits<Operation::Addition, Lhs, Rhs> : details::matrix_tag {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -56,7 +57,8 @@ struct ExpressionValidator<Operation::Addition, Lhs, Rhs>
 };
 
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::ScalarSubtraction, Lhs, Rhs> {
+struct ExpressionTraits<Operation::ScalarSubtraction, Lhs, Rhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -66,8 +68,9 @@ struct ExpressionValidator<Operation::ScalarSubtraction, Lhs, Rhs> {
 };
 
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::Subtraction, Lhs, Rhs>
+struct ExpressionTraits<Operation::Subtraction, Lhs, Rhs>
     : details::matrix_tag {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -101,7 +104,8 @@ struct ExpressionValidator<Operation::Subtraction, Lhs, Rhs>
 
 // Matrix multiplication
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::Multiplication, Lhs, Rhs> {
+struct ExpressionTraits<Operation::Multiplication, Lhs, Rhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -152,7 +156,8 @@ struct ExpressionValidator<Operation::Multiplication, Lhs, Rhs> {
 };
 
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::ScalarMultiplication, Lhs, Rhs> {
+struct ExpressionTraits<Operation::ScalarMultiplication, Lhs, Rhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -166,7 +171,8 @@ struct ExpressionValidator<Operation::ScalarMultiplication, Lhs, Rhs> {
 };
 
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::MatrixScalarDivision, Lhs, Rhs> {
+struct ExpressionTraits<Operation::MatrixScalarDivision, Lhs, Rhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -193,7 +199,8 @@ struct ExpressionValidator<Operation::MatrixScalarDivision, Lhs, Rhs> {
 
 // Vector dot product
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::DotProduct, Lhs, Rhs> {
+struct ExpressionTraits<Operation::DotProduct, Lhs, Rhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
   using value_type = details::result_type_t<typename Lhs::value_type,
                                             typename Rhs::value_type>;
@@ -216,7 +223,8 @@ struct ExpressionValidator<Operation::DotProduct, Lhs, Rhs> {
 
 // Square root of a scalar
 template <typename Lhs>
-struct ExpressionValidator<Operation::SquareRoot, Lhs> {
+struct ExpressionTraits<Operation::SquareRoot, Lhs> {
+  static constexpr bool lazy_evaluation = false;
   using expression_type = details::scalar_tag;
   using value_type = details::result_type_t<typename Lhs::value_type>;
 
@@ -228,12 +236,37 @@ struct ExpressionValidator<Operation::SquareRoot, Lhs> {
   static constexpr void dynamic_validate(const Lhs& /*lhs*/) {}
 };
 
-template <typename Op, typename... Operands>
-struct ExpressionValidator<Operation::Evaluate, Expression<Op, Operands...>> {
-  using Lhs = Expression<Op, Operands...>;
+// Evaluation
+namespace details {
+
+template <typename Lhs, typename ExprType>
+struct EvaluateExpressionTraits;
+
+template <typename Lhs>
+struct EvaluateExpressionTraits<Lhs, scalar_tag> {};
+
+template <typename Lhs>
+struct EvaluateExpressionTraits<Lhs, matrix_tag> {
+  static constexpr auto num_rows_static() { return Lhs::num_rows_static(); }
+  static constexpr auto num_cols_static() { return Lhs::num_cols_static(); }
+
+  static constexpr auto num_rows(const Lhs& lhs) { return lhs.num_rows(); }
+  static constexpr auto num_cols(const Lhs& lhs) { return lhs.num_cols(); }
+};
+
+};  // namespace details
+
+template <typename EvalType, typename Lhs>
+struct ExpressionTraits<Operation::Evaluate<EvalType>, Lhs>
+    : std::conditional_t<
+          details::is_scalar_v<Lhs>,
+          details::EvaluateExpressionTraits<Lhs, details::scalar_tag>,
+          details::EvaluateExpressionTraits<Lhs, details::matrix_tag>> {
+  static constexpr bool lazy_evaluation =
+      std::is_same_v<EvalType, Operation::lazy_evaluation_t>;
   using expression_type =
-      typename ExpressionValidator<Op,
-                                   std::decay_t<Operands>...>::expression_type;
+      std::conditional_t<details::is_scalar_v<Lhs>, details::scalar_tag,
+                         details::matrix_tag>;
   using value_type = details::result_type_t<typename Lhs::value_type>;
 
   static constexpr void static_validate() {}
@@ -244,8 +277,9 @@ struct ExpressionValidator<Operation::Evaluate, Expression<Op, Operands...>> {
 // Submatrix extraction
 template <std::size_t StartRow, std::size_t StartCol, std::size_t NumRows,
           std::size_t NumCols, typename Lhs>
-struct ExpressionValidator<
+struct ExpressionTraits<
     Operation::SubmatrixExtraction<StartRow, StartCol, NumRows, NumCols>, Lhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
   using value_type = details::result_type_t<typename Lhs::value_type>;
 
@@ -273,7 +307,8 @@ struct ExpressionValidator<
 
 // Strict equality
 template <typename Lhs, typename Rhs>
-struct ExpressionValidator<Operation::StrictEquality, Lhs, Rhs> {
+struct ExpressionTraits<Operation::StrictEquality, Lhs, Rhs> {
+  static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
   using value_type = bool;
 
@@ -296,7 +331,7 @@ struct ExpressionValidator<Operation::StrictEquality, Lhs, Rhs> {
 // Static conversion helpers
 namespace details {
 template <typename Lhs, typename FromType, typename ToType>
-struct ScalarStaticConversionExpressionValidator {
+struct ScalarStaticConversionExpressionTraits {
   using expression_type = details::scalar_tag;
   using value_type = ToType;
 
@@ -306,7 +341,7 @@ struct ScalarStaticConversionExpressionValidator {
 };
 
 template <typename Lhs, typename FromType, typename ToType>
-struct MatrixStaticConversionExpressionValidator {
+struct MatrixStaticConversionExpressionTraits {
   using expression_type = details::matrix_tag;
   using value_type = ToType;
 
@@ -322,12 +357,13 @@ struct MatrixStaticConversionExpressionValidator {
 }  // namespace details
 
 template <typename Lhs, typename FromType, typename ToType>
-struct ExpressionValidator<Operation::StaticConversion<FromType, ToType>, Lhs>
+struct ExpressionTraits<Operation::StaticConversion<FromType, ToType>, Lhs>
     : std::conditional_t<details::is_scalar_v<Lhs>,
-                         details::ScalarStaticConversionExpressionValidator<
+                         details::ScalarStaticConversionExpressionTraits<
                              Lhs, FromType, ToType>,
-                         details::MatrixStaticConversionExpressionValidator<
+                         details::MatrixStaticConversionExpressionTraits<
                              Lhs, FromType, ToType>> {
+  static constexpr bool lazy_evaluation = true;
   static constexpr void static_validate() {
     static_assert(std::is_same_v<FromType, typename Lhs::value_type>,
                   "Operand type does not match static conversion type");

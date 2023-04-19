@@ -61,7 +61,7 @@ install(
         include/optila_matrix_impl.h
         include/optila_scalar_impl.h
         include/optila_expression_impl.h
-        include/optila_expression_validator_impl.h
+        include/optila_expression_traits_impl.h
         include/optila_operation_impl.h
         include/optila_wrapper_free_functions.h
         include/optila_wrapper_operator_overloads.h
