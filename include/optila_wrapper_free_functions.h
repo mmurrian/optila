@@ -86,14 +86,10 @@ constexpr auto static_convert(Lhs&& mat) {
 
 template <typename Lhs>
 constexpr decltype(auto) evaluate(Lhs&& expr) {
-  return Expression<Operation::Evaluate<Operation::eager_evaluation_t>, Lhs>(
-      std::forward<Lhs>(expr));
-}
-
-template <typename Lhs>
-constexpr decltype(auto) lazyEvaluate(Lhs&& expr) {
-  return Expression<Operation::Evaluate<Operation::lazy_evaluation_t>, Lhs>(
-      std::forward<Lhs>(expr));
+  // Accept l-value and r-value expressions but do not std::forward<Expr> to
+  // the evaluator. The evaluator does not accept r-value expressions and will
+  // not manage the lifetime of the expression.
+  return Evaluator(expr).evaluate();
 }
 
 }  // namespace optila

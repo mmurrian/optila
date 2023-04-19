@@ -236,44 +236,6 @@ struct ExpressionTraits<Operation::SquareRoot, Lhs> {
   static constexpr void dynamic_validate(const Lhs& /*lhs*/) {}
 };
 
-// Evaluation
-namespace details {
-
-template <typename Lhs, typename ExprType>
-struct EvaluateExpressionTraits;
-
-template <typename Lhs>
-struct EvaluateExpressionTraits<Lhs, scalar_tag> {};
-
-template <typename Lhs>
-struct EvaluateExpressionTraits<Lhs, matrix_tag> {
-  static constexpr auto num_rows_static() { return Lhs::num_rows_static(); }
-  static constexpr auto num_cols_static() { return Lhs::num_cols_static(); }
-
-  static constexpr auto num_rows(const Lhs& lhs) { return lhs.num_rows(); }
-  static constexpr auto num_cols(const Lhs& lhs) { return lhs.num_cols(); }
-};
-
-};  // namespace details
-
-template <typename EvalType, typename Lhs>
-struct ExpressionTraits<Operation::Evaluate<EvalType>, Lhs>
-    : std::conditional_t<
-          details::is_scalar_v<Lhs>,
-          details::EvaluateExpressionTraits<Lhs, details::scalar_tag>,
-          details::EvaluateExpressionTraits<Lhs, details::matrix_tag>> {
-  static constexpr bool lazy_evaluation =
-      std::is_same_v<EvalType, Operation::lazy_evaluation_t>;
-  using expression_type =
-      std::conditional_t<details::is_scalar_v<Lhs>, details::scalar_tag,
-                         details::matrix_tag>;
-  using value_type = details::common_value_type_t<typename Lhs::value_type>;
-
-  static constexpr void static_validate() {}
-
-  static constexpr void dynamic_validate(const Lhs& /*lhs*/) {}
-};
-
 // Submatrix extraction
 template <std::size_t StartRow, std::size_t StartCol, std::size_t NumRows,
           std::size_t NumCols, typename Lhs>

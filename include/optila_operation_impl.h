@@ -177,19 +177,4 @@ struct DiagonalMatrix {
   };
 };
 
-struct eager_evaluation_t {
-  constexpr eager_evaluation_t() = default;
-};
-struct lazy_evaluation_t {
-  lazy_evaluation_t() {}
-};
-
-template <typename EvalType>
-struct Evaluate {
-  EvalType check_for_nonconstexpr_operation_in_constexpr_context{};
-  static constexpr auto to_scalar = [](auto&& lhs) { return lhs(); };
-  static constexpr auto to_matrix_element =
-      [](std::size_t i, std::size_t j, auto&& lhs) { return lhs(i, j); };
-};
-
 }  // namespace optila::Operation

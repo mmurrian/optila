@@ -1,8 +1,21 @@
 #pragma once
 
+#include <tuple>
 #include <type_traits>
+#include <utility>
 
 namespace optila::details {
+
+template <typename... Args, std::size_t... Is>
+constexpr decltype(auto) make_tuple_ref(const std::tuple<Args...>& tuple,
+                                        std::index_sequence<Is...>) {
+  return std::tie(std::get<Is>(tuple)...);
+}
+
+template <typename... Args>
+constexpr decltype(auto) make_tuple_ref(const std::tuple<Args...>& tuple) {
+  return make_tuple_ref(tuple, std::make_index_sequence<sizeof...(Args)>());
+}
 
 template <typename T, bool SmallTrivial = (sizeof(T) <= sizeof(void*) &&
                                            std::is_trivially_copyable_v<T> &&

@@ -4,6 +4,7 @@
 
 #include "details/optila_matrix.h"
 #include "details/optila_type_traits.h"
+#include "optila_evaluator_impl.h"
 
 namespace optila {
 
@@ -72,6 +73,17 @@ class Matrix : public details::matrix_tag {
       typename std::enable_if_t<(R != Dynamic) && (C != Dynamic), int> = 0>
   constexpr Matrix(const ValueType (&from)[R][C]) {
     details::assign_array_2d_to_matrix(from, *this);
+  }
+
+  template <typename Expr,
+            typename = std::enable_if_t<
+                details::is_expression_literal_v<std::decay_t<Expr>> &&
+                details::is_matrix_v<Expr>>>
+  constexpr Matrix(Expr&& expr) {
+    // Accept l-value and r-value expressions but do not std::forward<Expr> to
+    // the evaluator. The evaluator does not accept r-value expressions and will
+    // not manage the lifetime of the expression.
+    Evaluator<std::decay_t<Expr>>(expr).evaluate_into(*this);
   }
 
   template <typename OtherValueType, std::size_t OtherNumRows,
