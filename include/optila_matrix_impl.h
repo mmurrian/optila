@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "details/optila_expression.h"
 #include "details/optila_matrix.h"
 #include "details/optila_type_traits.h"
 #include "optila_evaluator_impl.h"
@@ -15,8 +16,7 @@ constexpr static void assign_matrix_to_matrix(const From& from, To& to) {
                                                    typename To::value_type>,
                                typename From::value_type>,
                 "Cannot assign incompatible types to matrix");
-  if constexpr (To::num_rows_static() == Dynamic ||
-                To::num_cols_static() == Dynamic) {
+  if constexpr (details::is_dynamic_expression_v<To>) {
     to.resize(from.num_rows(), from.num_cols());
   } else {
     static_assert((From::num_rows_static() == To::num_rows_static() ||
@@ -167,9 +167,12 @@ Matrix(const ValueType (&)[NumRows][NumCols])
     -> Matrix<ValueType, NumRows, NumCols>;
 
 template <typename Expr,
-          typename = std::enable_if_t<details::is_matrix_v<Expr>>>
-Matrix(Expr&& expr) -> Matrix<typename Expr::value_type,
-                              Expr::num_rows_static(), Expr::num_cols_static()>;
+          typename = std::enable_if_t<
+              details::is_expression_literal_v<std::decay_t<Expr>> &&
+              details::is_matrix_v<Expr>>>
+Matrix(Expr&& expr) -> Matrix<typename std::decay_t<Expr>::value_type,
+                              std::decay_t<Expr>::num_rows_static(),
+                              std::decay_t<Expr>::num_cols_static()>;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 constexpr decltype(auto) make_matrix(

@@ -4,6 +4,7 @@
 
 #include "details/optila_expression.h"
 #include "details/optila_scalar.h"
+#include "optila_evaluator_impl.h"
 
 namespace optila {
 
@@ -14,18 +15,18 @@ class Scalar : public details::scalar_tag {
 
   constexpr Scalar() = default;
 
-  // Enable this constructor only for arithmetic types, allowing implicit
-  // conversion
-  template <typename T = ValueType,
-            std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
-  constexpr explicit Scalar(value_type value) : value_(value) {}
+  constexpr explicit Scalar(value_type value) : value_(std::move(value)) {}
 
-  // Enable this constructor for non-arithmetic types, requiring explicit
-  // conversion
-  template <typename T = ValueType,
-            std::enable_if_t<!std::is_arithmetic_v<T>, int> = 0>
-  constexpr explicit Scalar(value_type&& value)
-      : value_(std::forward<value_type>(value)) {}
+  template <typename Expr,
+            typename = std::enable_if_t<
+                details::is_expression_literal_v<std::decay_t<Expr>> &&
+                details::is_scalar_v<Expr>>>
+  constexpr Scalar(Expr&& expr) {
+    // Accept l-value and r-value expressions but do not std::forward<Expr> to
+    // the evaluator. The evaluator does not accept r-value expressions and will
+    // not manage the lifetime of the expression.
+    Evaluator<std::decay_t<Expr>>(expr).evaluate_into(*this);
+  }
 
   constexpr operator decltype(auto)() const { return value_; }
   constexpr decltype(auto) operator()() const { return value_; }
@@ -41,11 +42,13 @@ constexpr Scalar<ValueType> make_scalar(ValueType&& args) {
 
 // Deduction guides for Scalar
 template <typename ValueType,
-          typename = std::enable_if_t<!details::is_expression_v<ValueType>>>
+          typename = std::enable_if_t<std::is_arithmetic_v<ValueType>>>
 Scalar(ValueType) -> Scalar<ValueType>;
 
 template <typename Expr,
-          typename = std::enable_if_t<details::is_expression_v<Expr>>>
-Scalar(Expr&& expr) -> Scalar<typename Expr::value_type>;
+          typename = std::enable_if_t<
+              details::is_expression_literal_v<std::decay_t<Expr>> &&
+              details::is_scalar_v<Expr>>>
+Scalar(Expr&& expr) -> Scalar<typename std::decay_t<Expr>::value_type>;
 
 }  // namespace optila

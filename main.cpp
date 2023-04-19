@@ -102,12 +102,24 @@ int dynamic_tests() {
   assert(C.num_rows() == 3);
   assert(C.num_cols() == 1);
 
-  auto D = optila::evaluate(C);
+  // Test implicit evaluation of a matrix expression into a static matrix
+  optila::Matrix<double, 3, 1> D = C;
   assert(D(0, 0) == 14);
   assert(D(1, 0) == 32);
   assert(D(2, 0) == 50);
 
-  optila::Scalar E = optila::evaluate(optila::dot(b, b));
+  // Test implicit evaluation of a matrix expression with template parameters
+  // deduced.
+  optila::Matrix D2 = C;
+
+  // Test explicit evaluation of a matrix expression.
+  const auto D3 = optila::evaluate(C);
+  assert(D == D2);
+  assert(D == D3);
+
+  // Test implicit evaluation of a scalar expression with template parameters
+  // deduced.
+  optila::Scalar E = optila::dot(b, b);
   assert(E == 14);
 
   auto F = optila::evaluate(C + b);
@@ -123,9 +135,9 @@ int dynamic_tests() {
   assert(H(1, 0) == 8);
   assert(H(1, 1) == 9);
 
-  optila::Scalar bNorm = optila::evaluate(optila::norm(b));
+  optila::Scalar bNorm = optila::norm(b);
   assert(bNorm == 3.7416573867739413);
-  auto I = optila::normalize(b);
+  optila::Matrix I = optila::normalize(b);
   assert(I(0, 0) == 0.2672612419124244);
   assert(I(1, 0) == 0.5345224838248488);
   assert(I(2, 0) == 0.8017837257372732);
@@ -149,6 +161,11 @@ int constexpr_tests() {
   static_assert(D(0, 0) == 14);
   static_assert(D(1, 0) == 32);
   static_assert(D(2, 0) == 50);
+
+  static constexpr optila::Matrix D2 = C;
+  static constexpr auto D3 = optila::evaluate(C);
+  static_assert(D == D2);
+  static_assert(D == D3);
 
   static constexpr optila::Scalar E = optila::evaluate(optila::dot(b, b));
   static_assert(E == 14);
