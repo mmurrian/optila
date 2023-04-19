@@ -28,16 +28,6 @@ struct is_expression : std::conditional_t<is_matrix_v<std::decay_t<Lhs>> ||
 template <typename T>
 inline constexpr bool is_expression_v = is_expression<T>::value;
 
-template <std::size_t Index, typename Expr>
-struct is_operand_expression_literal {
-  static constexpr bool value = is_expression_literal_v<
-      typename std::decay_t<Expr>::template operand_type<Index>>;
-};
-
-template <std::size_t Index, typename Expr>
-inline constexpr bool is_operand_expression_literal_v =
-    is_operand_expression_literal<Index, Expr>::value;
-
 template <typename Lhs, typename = void>
 struct is_static_expression;
 

@@ -7,7 +7,6 @@
 #include "details/optila_scalar.h"
 #include "details/optila_type_traits.h"
 #include "optila_expression_traits_impl.h"
-#include "optila_operation_impl.h"
 #include "optila_scalar_impl.h"
 
 namespace optila {
@@ -41,10 +40,6 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
 
  public:
   using value_type = typename ExprTraits::value_type;
-  using operation_type = Op;
-  template <std::size_t index>
-  using operand_type =
-      std::tuple_element_t<index, std::tuple<std::decay_t<Operands>...>>;
 
   constexpr explicit ExpressionImpl(Operands&&... operands)
       : storage_(std::forward<Operands>(operands)...) {
@@ -162,10 +157,6 @@ class ExpressionImpl<details::scalar_tag, Op, Operands...>
 
  public:
   using value_type = typename ExprTraits::value_type;
-  using operation_type = Op;
-  template <std::size_t index>
-  using operand_type =
-      std::tuple_element_t<index, std::tuple<std::decay_t<Operands>...>>;
 
   constexpr explicit ExpressionImpl(Operands&&... operands)
       : storage_(std::forward<Operands>(operands)...) {
