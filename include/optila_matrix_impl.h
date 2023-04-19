@@ -10,11 +10,10 @@ namespace optila {
 namespace details {
 template <typename From, typename To>
 constexpr static void assign_matrix_to_matrix(const From& from, To& to) {
-  static_assert(
-      std::is_same_v<
-          result_type_t<typename From::value_type, typename To::value_type>,
-          typename From::value_type>,
-      "Cannot assign incompatible types to matrix");
+  static_assert(std::is_same_v<common_value_type_t<typename From::value_type,
+                                                   typename To::value_type>,
+                               typename From::value_type>,
+                "Cannot assign incompatible types to matrix");
   if constexpr (To::num_rows_static() == Dynamic ||
                 To::num_cols_static() == Dynamic) {
     to.resize(from.num_rows(), from.num_cols());

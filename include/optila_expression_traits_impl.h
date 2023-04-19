@@ -15,8 +15,8 @@ template <typename Lhs, typename Rhs>
 struct ExpressionTraits<Operation::ScalarAddition, Lhs, Rhs> {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
                 "Mismatched operands for scalar addition");
@@ -26,8 +26,8 @@ template <typename Lhs, typename Rhs>
 struct ExpressionTraits<Operation::Addition, Lhs, Rhs> : details::matrix_tag {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static constexpr auto num_rows_static() { return Lhs::num_rows_static(); }
 
@@ -60,8 +60,8 @@ template <typename Lhs, typename Rhs>
 struct ExpressionTraits<Operation::ScalarSubtraction, Lhs, Rhs> {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
                 "Mismatched operands for scalar subtraction");
@@ -72,8 +72,8 @@ struct ExpressionTraits<Operation::Subtraction, Lhs, Rhs>
     : details::matrix_tag {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static constexpr auto num_rows_static() { return Lhs::num_rows_static(); }
 
@@ -107,8 +107,8 @@ template <typename Lhs, typename Rhs>
 struct ExpressionTraits<Operation::Multiplication, Lhs, Rhs> {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static constexpr auto num_rows_static() {
     if constexpr (details::is_matrix_v<Lhs>) {
@@ -159,8 +159,8 @@ template <typename Lhs, typename Rhs>
 struct ExpressionTraits<Operation::ScalarMultiplication, Lhs, Rhs> {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static constexpr void static_validate() {
     static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
@@ -174,8 +174,8 @@ template <typename Lhs, typename Rhs>
 struct ExpressionTraits<Operation::MatrixScalarDivision, Lhs, Rhs> {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static constexpr auto num_rows_static() { return Lhs::num_rows_static(); }
 
@@ -202,8 +202,8 @@ template <typename Lhs, typename Rhs>
 struct ExpressionTraits<Operation::DotProduct, Lhs, Rhs> {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::scalar_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type,
-                                            typename Rhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
 
   static constexpr void static_validate() {
     static_assert(
@@ -226,7 +226,7 @@ template <typename Lhs>
 struct ExpressionTraits<Operation::SquareRoot, Lhs> {
   static constexpr bool lazy_evaluation = false;
   using expression_type = details::scalar_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type>;
 
   static_assert(details::is_scalar_v<Lhs>,
                 "Square root requires a scalar operand");
@@ -267,7 +267,7 @@ struct ExpressionTraits<Operation::Evaluate<EvalType>, Lhs>
   using expression_type =
       std::conditional_t<details::is_scalar_v<Lhs>, details::scalar_tag,
                          details::matrix_tag>;
-  using value_type = details::result_type_t<typename Lhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type>;
 
   static constexpr void static_validate() {}
 
@@ -281,7 +281,7 @@ struct ExpressionTraits<
     Operation::SubmatrixExtraction<StartRow, StartCol, NumRows, NumCols>, Lhs> {
   static constexpr bool lazy_evaluation = true;
   using expression_type = details::matrix_tag;
-  using value_type = details::result_type_t<typename Lhs::value_type>;
+  using value_type = details::common_value_type_t<typename Lhs::value_type>;
 
   static constexpr auto num_rows_static() { return NumRows; }
   static constexpr auto num_cols_static() { return NumCols; }

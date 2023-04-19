@@ -12,16 +12,16 @@
 namespace optila {
 
 template <typename ExprType, typename Op, typename... Operands>
-struct expression_result_type;
+struct expression_common_value_type;
 
 template <typename Op, typename... Operands>
-struct expression_result_type<details::scalar_tag, Op, Operands...> {
+struct expression_common_value_type<details::scalar_tag, Op, Operands...> {
   using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
   using type = Scalar<typename ExprTraits::value_type>;
 };
 
 template <typename Op, typename... Operands>
-struct expression_result_type<details::matrix_tag, Op, Operands...> {
+struct expression_common_value_type<details::matrix_tag, Op, Operands...> {
   using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
   using type = Matrix<typename ExprTraits::value_type,
                       std::decay_t<ExprTraits>::num_rows_static(),
@@ -123,9 +123,8 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
     }
   }
 
-  using result_storage_type =
-      typename expression_result_type<typename ExprTraits::expression_type, Op,
-                                      Operands...>::type;
+  using result_storage_type = typename expression_common_value_type<
+      typename ExprTraits::expression_type, Op, Operands...>::type;
   using operand_storage_type =
       std::tuple<details::store_by_value_or_const_ref_t<Operands>...>;
 
@@ -191,9 +190,8 @@ class ExpressionImpl<details::scalar_tag, Op, Operands...>
     }
   }
 
-  using result_storage_type =
-      typename expression_result_type<typename ExprTraits::expression_type, Op,
-                                      Operands...>::type;
+  using result_storage_type = typename expression_common_value_type<
+      typename ExprTraits::expression_type, Op, Operands...>::type;
   using operand_storage_type =
       std::tuple<details::store_by_value_or_const_ref_t<Operands>...>;
 

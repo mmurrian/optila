@@ -39,8 +39,8 @@ struct Multiplication {
     if constexpr (details::is_matrix_v<decltype(lhs)> &&
                   details::is_matrix_v<decltype(rhs)>) {
       using value_type =
-          details::result_type_t<std::decay_t<decltype(lhs(0, 0))>,
-                                 std::decay_t<decltype(rhs(0, 0))>>;
+          details::common_value_type_t<std::decay_t<decltype(lhs(0, 0))>,
+                                       std::decay_t<decltype(rhs(0, 0))>>;
       value_type result = 0;
       for (std::size_t k = 0; k < lhs.num_cols(); ++k) {
         result += lhs(i, k) * rhs(k, j);

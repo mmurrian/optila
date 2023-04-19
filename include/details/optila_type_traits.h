@@ -47,17 +47,17 @@ inline constexpr bool are_same_v = are_same<T, Ts...>::value;
 
 #ifdef OPTILA_ENABLE_IMPLICIT_CONVERSIONS
 template <typename... Args>
-struct result_type : std::common_type<Args...> {};
+struct common_value_type : std::common_type<Args...> {};
 #else
 template <typename T, typename... Ts>
-struct result_type {
+struct common_value_type {
   static_assert(are_same_v<T, Ts...>,
                 "Operand type mismatch with implicit conversions disabled.");
   using type = T;
 };
 
 template <typename T, typename... Ts>
-using result_type_t = typename result_type<T, Ts...>::type;
+using common_value_type_t = typename common_value_type<T, Ts...>::type;
 #endif
 
 template <typename Lhs, typename Rhs, bool IsRhsVoid>
