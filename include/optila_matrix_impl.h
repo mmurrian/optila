@@ -99,7 +99,7 @@ class Matrix : public details::matrix_tag {
 
   // Return by value or const reference depending on the size and other
   // characteristics of the value type
-  using const_value_type = details::return_by_value_or_const_ref_t<value_type>;
+  using const_value_type = details::efficient_type_qualifiers_t<value_type>;
   [[nodiscard]] constexpr const_value_type operator()(std::size_t i,
                                                       std::size_t j) const {
     return storage_[linear_index(i, j)];

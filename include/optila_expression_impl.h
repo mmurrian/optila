@@ -12,24 +12,6 @@
 namespace optila {
 
 template <typename ExprType, typename Op, typename... Operands>
-struct expression_common_value_type;
-
-template <typename Op, typename... Operands>
-struct expression_common_value_type<details::scalar_tag, Op, Operands...> {
-  using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
-  using type = Scalar<typename ExprTraits::value_type>;
-};
-
-template <typename Op, typename... Operands>
-struct expression_common_value_type<details::matrix_tag, Op, Operands...> {
-  using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
-  using type = Matrix<typename ExprTraits::value_type,
-                      std::decay_t<ExprTraits>::num_rows_static(),
-                      std::decay_t<ExprTraits>::num_cols_static(),
-                      StorageOrder::RowMajor>;
-};
-
-template <typename ExprType, typename Op, typename... Operands>
 class ExpressionImpl;
 
 // Partial specialization for matrix_tag
@@ -83,6 +65,9 @@ class Expression
       typename ExpressionTraits<Op, std::decay_t<Operands>...>::expression_type,
       Op, Operands...>;
 
+  using operand_storage_type =
+      std::tuple<details::safe_type_qualifiers_t<Operands>...>;
+
  public:
   using value_type = typename Base::value_type;
   using result_type = typename Base::result_type;
@@ -99,13 +84,14 @@ class Expression
   }
 
   using operation = Op;
-  constexpr decltype(auto) operands() const {
-    return details::make_tuple_ref(m_operands);
-  }
+
+  // Return the tuple of operands by-value only if it is small and trivial.
+  // Otherwise, return by const reference.
+  using operand_return_type =
+      details::efficient_type_qualifiers_t<operand_storage_type>;
+  constexpr operand_return_type operands() const { return m_operands; }
 
  private:
-  using operand_storage_type =
-      std::tuple<details::store_by_value_or_const_ref_t<Operands>...>;
   operand_storage_type m_operands;
 };
 

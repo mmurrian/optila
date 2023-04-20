@@ -93,6 +93,10 @@ int dynamic_tests() {
   assert(A.num_rows() == 3);
   assert(A.num_cols() == 3);
 
+  // Test copying matrix to matrix.
+  optila::Matrix<double, 3, 3> Acopy = A;
+  assert(Acopy == A);
+
   optila::Matrix<double, optila::Dynamic, optila::Dynamic> b{{{1}, {2}, {3}}};
   assert(b.num_rows() == 3);
   assert(b.num_cols() == 1);
@@ -148,6 +152,11 @@ int dynamic_tests() {
 int constexpr_tests() {
   static constexpr optila::Matrix<double, 3, 3> A{
       {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}};
+
+  // Test copying matrix to matrix.
+  static constexpr optila::Matrix<double, 3, 3> Acopy = A;
+  static_assert(Acopy == A);
+
   // Tests deduction guide for static matrices. Note that this constructs a
   // matrix of ints.
   static constexpr optila::Matrix b({{1}, {2}, {3}});

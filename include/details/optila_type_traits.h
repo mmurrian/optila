@@ -6,51 +6,33 @@
 
 namespace optila::details {
 
-template <typename... Args, std::size_t... Is>
-constexpr decltype(auto) make_tuple_ref(const std::tuple<Args...>& tuple,
-                                        std::index_sequence<Is...>) {
-  return std::tie(std::get<Is>(tuple)...);
-}
+template <typename T>
+struct is_small_trivial
+    : std::bool_constant<(sizeof(std::decay_t<T>) <= sizeof(void*)) &&
+                         std::is_trivially_copyable_v<std::decay_t<T>> &&
+                         alignof(std::decay_t<T>) <= sizeof(void*)> {};
 
-template <typename... Args>
-constexpr decltype(auto) make_tuple_ref(const std::tuple<Args...>& tuple) {
-  return make_tuple_ref(tuple, std::make_index_sequence<sizeof...(Args)>());
-}
+template <typename T>
+inline constexpr bool is_small_trivial_v = is_small_trivial<T>::value;
 
-template <typename T, bool SmallTrivial = (sizeof(T) <= sizeof(void*) &&
-                                           std::is_trivially_copyable_v<T> &&
-                                           alignof(T) <= sizeof(void*))>
-struct return_by_value_or_const_ref {
-  using type = std::conditional_t<SmallTrivial, T, const T&>;
+template <typename T>
+struct efficient_type_qualifiers {
+  using type = std::conditional_t<is_small_trivial_v<T>, std::decay_t<T>,
+                                  const std::decay_t<T>&>;
 };
 
 template <typename T>
-using return_by_value_or_const_ref_t =
-    typename return_by_value_or_const_ref<T>::type;
+using efficient_type_qualifiers_t = typename efficient_type_qualifiers<T>::type;
 
 template <typename T>
-struct store_by_value_or_const_ref {
-  using type = std::conditional_t<std::is_lvalue_reference_v<T>,
+struct safe_type_qualifiers {
+  using type = std::conditional_t<std::is_lvalue_reference_v<T> &&
+                                      !is_small_trivial_v<std::decay_t<T>>,
                                   const std::decay_t<T>&, std::decay_t<T>>;
 };
 
 template <typename T>
-using store_by_value_or_const_ref_t =
-    typename store_by_value_or_const_ref<T>::type;
-
-template <typename T>
-struct expr_value_type_if_not_void {
-  using type = typename std::decay_t<T>::value_type;
-};
-
-template <>
-struct expr_value_type_if_not_void<void> {
-  using type = void;
-};
-
-template <typename T>
-using expr_value_type_if_not_void_t =
-    typename expr_value_type_if_not_void<T>::type;
+using safe_type_qualifiers_t = typename safe_type_qualifiers<T>::type;
 
 template <class T, class... Ts>
 struct are_same : std::conjunction<std::is_same<T, Ts>...> {};

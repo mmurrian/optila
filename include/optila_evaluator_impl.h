@@ -17,9 +17,22 @@ class BaseEvaluator {};
 
 template <typename Op, typename... Operands>
 class BaseEvaluator<Expression<Op, Operands...>> {
+  // Accept and store the expression by value if is it small and trivial.
+  // Otherwise, accept and store it by const reference.
+  //
+  // IMPORTANT: This must match the return type behavior of Expression::expr().
+  // If Expression::expr() returns by value then this must store by value as
+  // well. Otherwise, this would store a dangling reference (the value is a
+  // temporary).
+  using expression_storage_type =
+      details::efficient_type_qualifiers_t<Expression<Op, Operands...>>;
+
+  using operands_storage_type =
+      std::tuple<Evaluator<std::decay_t<Operands>>...>;
+
  public:
-  constexpr explicit BaseEvaluator(const Expression<Op, Operands...>& expr)
-      : m_expr(expr), m_nested(m_expr.operands()) {}
+  constexpr explicit BaseEvaluator(expression_storage_type expr)
+      : m_expr(std::move(expr)), m_nested(m_expr.operands()) {}
 
   // Deleted constructor for rvalue references. Evaluators shall not be
   // constructed from temporary expressions. What this means is that this is
@@ -29,6 +42,7 @@ class BaseEvaluator<Expression<Op, Operands...>> {
   // Evaluator(expr).evaluate()
   //
   // and this is not allowed:
+  //
   // Evaluator(A + B).evaluate()
   //
   // To be clear, in the disallowed example, the lifetime of  A + B ends after
@@ -40,13 +54,14 @@ class BaseEvaluator<Expression<Op, Operands...>> {
 
  protected:
   constexpr decltype(auto) expr() const { return m_expr; }
-  constexpr decltype(auto) operands() const {
-    return details::make_tuple_ref(m_nested);
-  }
+
+  using operands_return_type =
+      details::efficient_type_qualifiers_t<operands_storage_type>;
+  constexpr operands_return_type operands() const { return m_nested; }
 
  private:
-  const Expression<Op, Operands...>& m_expr;
-  std::tuple<Evaluator<std::decay_t<Operands>>...> m_nested;
+  expression_storage_type m_expr;
+  operands_storage_type m_nested;
 };
 
 template <typename Op, typename... Operands>
@@ -159,61 +174,71 @@ template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
 class Evaluator<Matrix<ValueType, NumRows, NumCols, Order>>
     : public BaseEvaluator<Matrix<ValueType, NumRows, NumCols, Order>>,
       public details::matrix_tag {
+  using matrix_storage_type = details::efficient_type_qualifiers_t<
+      Matrix<ValueType, NumRows, NumCols, Order>>;
+
  public:
   using result_type = Matrix<ValueType, NumRows, NumCols, Order>;
 
-  constexpr explicit Evaluator(const result_type& value) : value_(value) {}
+  constexpr explicit Evaluator(matrix_storage_type value)
+      : m_value(std::move(value)) {}
+  constexpr explicit Evaluator(result_type&&) = delete;
 
   constexpr static std::size_t num_rows_static() { return NumRows; }
 
   constexpr static std::size_t num_cols_static() { return NumCols; }
 
   [[nodiscard]] constexpr std::size_t num_rows() const {
-    return value_.num_rows();
+    return m_value.num_rows();
   }
 
   [[nodiscard]] constexpr std::size_t num_cols() const {
-    return value_.num_cols();
+    return m_value.num_cols();
   }
 
   constexpr decltype(auto) operator()(std::size_t i, std::size_t j) const {
-    return value_(i, j);
+    return m_value(i, j);
   }
 
-  constexpr const result_type& evaluate() const { return value_; }
+  constexpr matrix_storage_type evaluate() const { return m_value; }
 
   template <typename OtherValueType, std::size_t OtherNumRows,
             std::size_t OtherNumCols, StorageOrder OtherOrder>
   constexpr void evaluate_into(Matrix<OtherValueType, OtherNumRows,
                                       OtherNumCols, OtherOrder>& dest) const {
-    dest = value_;
+    dest = m_value;
   }
 
  private:
-  const result_type& value_;
+  matrix_storage_type m_value;
 };
 
 template <typename ValueType>
 class Evaluator<Scalar<ValueType>> : public BaseEvaluator<Scalar<ValueType>>,
                                      public details::scalar_tag {
+  using scalar_storage_type =
+      details::efficient_type_qualifiers_t<Scalar<ValueType>>;
+
  public:
   using result_type = Scalar<ValueType>;
 
-  constexpr explicit Evaluator(const result_type& value) : value_(value) {}
+  constexpr explicit Evaluator(scalar_storage_type value)
+      : m_value(std::move(value)) {}
+  constexpr Evaluator(result_type&&) = delete;
 
-  constexpr decltype(auto) operator()() const { return value_(); }
+  constexpr decltype(auto) operator()() const { return m_value(); }
 
-  constexpr ValueType evaluate() const { return value_(); }
+  constexpr ValueType evaluate() const { return m_value(); }
 
   template <typename OtherValueType>
   constexpr void evaluate_into(OtherValueType& dest) const {
     using CommonValueType =
         details::common_value_type_t<ValueType, OtherValueType>;
-    dest = static_cast<CommonValueType>(value_());
+    dest = static_cast<CommonValueType>(m_value());
   }
 
  private:
-  const result_type& value_;
+  scalar_storage_type m_value;
 };
 
 template <typename Expr,
