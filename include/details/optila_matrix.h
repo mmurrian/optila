@@ -13,8 +13,14 @@ enum class StorageOrder {
 
 enum : std::size_t { Dynamic = static_cast<std::size_t>(-1) };
 
+struct DefaultMatrixPolicy {
+  constexpr static auto NumRowsHint = 1000;
+  constexpr static auto NumColsHint = 1000;
+  constexpr static StorageOrder Order = StorageOrder::RowMajor;
+};
+
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          StorageOrder Order>
+          typename Policy>
 class Matrix;
 
 namespace details {
@@ -32,7 +38,7 @@ template <typename T>
 struct is_static_row_vector
     : std::conjunction<
           is_matrix<T>,
-          std::bool_constant<std::decay_t<T>::num_rows_static() == 1>> {};
+          std::bool_constant<std::decay_t<T>::num_rows_compile_time == 1>> {};
 
 template <typename T>
 inline constexpr bool is_static_row_vector_v = is_static_row_vector<T>::value;
@@ -41,7 +47,7 @@ template <typename T>
 struct is_static_column_vector
     : std::conjunction<
           is_matrix<T>,
-          std::bool_constant<std::decay_t<T>::num_cols_static() == 1>> {};
+          std::bool_constant<std::decay_t<T>::num_cols_compile_time == 1>> {};
 
 template <typename T>
 inline constexpr bool is_static_column_vector_v =
@@ -58,8 +64,8 @@ template <typename T>
 struct is_matrix_literal : std::false_type {};
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          StorageOrder Order>
-struct is_matrix_literal<Matrix<ValueType, NumRows, NumCols, Order>>
+          typename Policy>
+struct is_matrix_literal<Matrix<ValueType, NumRows, NumCols, Policy>>
     : std::true_type {};
 
 template <typename T>
@@ -80,10 +86,8 @@ struct MatrixStaticStorage {
     return data_[idx];
   }
 
-  static constexpr std::size_t num_rows() { return NumRows; }
-  static constexpr std::size_t num_cols() { return NumCols; }
-
-  static constexpr std::size_t size() { return NumRows * NumCols; }
+  constexpr static auto num_rows() { return NumRows; }
+  constexpr static auto num_cols() { return NumCols; }
 
  private:
   struct array_wrapper {

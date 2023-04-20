@@ -3,7 +3,6 @@
 #include <cmath>
 #include <tuple>
 
-#include "details/optila_expression.h"
 #include "details/optila_matrix.h"
 #include "details/optila_type_traits.h"
 

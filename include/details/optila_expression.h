@@ -34,8 +34,9 @@ struct is_static_expression;
 template <typename Lhs>
 struct is_static_expression<
     Lhs, std::enable_if_t<std::is_base_of_v<matrix_tag, std::decay_t<Lhs>>>>
-    : std::conditional_t<std::decay_t<Lhs>::num_rows_static() != Dynamic &&
-                             std::decay_t<Lhs>::num_cols_static() != Dynamic,
+    : std::conditional_t<std::decay_t<Lhs>::num_rows_compile_time != Dynamic &&
+                             std::decay_t<Lhs>::num_cols_compile_time !=
+                                 Dynamic,
                          std::true_type, std::false_type> {};
 
 template <typename Lhs>
@@ -48,8 +49,9 @@ inline constexpr bool is_static_expression_v = is_static_expression<Lhs>::value;
 
 template <typename Lhs>
 struct is_dynamic_expression
-    : std::conditional_t<std::decay_t<Lhs>::num_rows_static() == Dynamic ||
-                             std::decay_t<Lhs>::num_cols_static() == Dynamic,
+    : std::conditional_t<std::decay_t<Lhs>::num_rows_compile_time == Dynamic ||
+                             std::decay_t<Lhs>::num_cols_compile_time ==
+                                 Dynamic,
                          std::true_type, std::false_type> {};
 
 template <typename Lhs>

@@ -29,14 +29,15 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
  public:
   using value_type = typename ExprTraits::value_type;
   using result_type =
-      Matrix<value_type, ExprTraits::num_rows_static(),
-             ExprTraits::num_cols_static(), StorageOrder::RowMajor>;
-  static constexpr std::size_t num_rows_static() {
-    return ExprTraits::num_rows_static();
-  }
-  static constexpr std::size_t num_cols_static() {
-    return ExprTraits::num_cols_static();
-  }
+      Matrix<value_type, ExprTraits::num_rows_compile_time,
+             ExprTraits::num_cols_compile_time, DefaultMatrixPolicy>;
+  constexpr static auto num_rows_compile_time =
+      ExprTraits::num_rows_compile_time;
+  constexpr static auto num_cols_compile_time =
+      ExprTraits::num_cols_compile_time;
+  constexpr static auto num_rows_hint = ExprTraits::num_rows_hint;
+  constexpr static auto num_cols_hint = ExprTraits::num_cols_hint;
+
   [[nodiscard]] constexpr std::size_t num_rows() const {
     return std::apply(ExprTraits::num_rows, derived().operands());
   }

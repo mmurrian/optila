@@ -19,11 +19,12 @@ constexpr static void assign_matrix_to_matrix(const From& from, To& to) {
   if constexpr (details::is_dynamic_expression_v<To>) {
     to.resize(from.num_rows(), from.num_cols());
   } else {
-    static_assert((From::num_rows_static() == To::num_rows_static() ||
-                   From::num_rows_static() == Dynamic) &&
-                      (From::num_cols_static() == To::num_cols_static() ||
-                       From::num_cols_static() == Dynamic),
-                  "Cannot assign to static matrix with different size");
+    static_assert(
+        (From::num_rows_compile_time == To::num_rows_compile_time ||
+         From::num_rows_compile_time == Dynamic) &&
+            (From::num_cols_compile_time == To::num_cols_compile_time ||
+             From::num_cols_compile_time == Dynamic),
+        "Cannot assign to static matrix with different size");
     assert(from.num_rows() == to.num_rows() &&
            from.num_cols() == to.num_cols());
   }
@@ -38,13 +39,13 @@ template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           typename To>
 constexpr static void assign_array_2d_to_matrix(
     const ValueType (&from)[NumRows][NumCols], To& to) {
-  if constexpr (To::num_rows_static() == Dynamic ||
-                To::num_cols_static() == Dynamic) {
+  if constexpr (To::num_rows_compile_time == Dynamic ||
+                To::num_cols_compile_time == Dynamic) {
     to.resize(NumRows, NumCols);
   } else {
-    static_assert(
-        NumRows == To::num_rows_static() && NumCols == To::num_cols_static(),
-        "Static matrix initialization must match matrix size");
+    static_assert(NumRows == To::num_rows_compile_time &&
+                      NumCols == To::num_cols_compile_time,
+                  "Static matrix initialization must match matrix size");
   }
 
   std::size_t i = 0;
@@ -60,9 +61,13 @@ constexpr static void assign_array_2d_to_matrix(
 }  // namespace details
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          StorageOrder Order = StorageOrder::RowMajor>
+          typename Policy = DefaultMatrixPolicy>
 class Matrix : public details::matrix_tag {
  public:
+  static_assert(Policy::NumRowsHint != Dynamic &&
+                    Policy::NumColsHint != Dynamic,
+                "Matrix policy must specify static hints for matrix size");
+
   using value_type = ValueType;
 
   constexpr Matrix() = default;
@@ -87,9 +92,9 @@ class Matrix : public details::matrix_tag {
   }
 
   template <typename OtherValueType, std::size_t OtherNumRows,
-            std::size_t OtherNumCols, StorageOrder OtherOrder>
+            std::size_t OtherNumCols, typename OtherPolicy>
   constexpr Matrix(const Matrix<OtherValueType, OtherNumRows, OtherNumCols,
-                                OtherOrder>& other) {
+                                OtherPolicy>& other) {
     details::assign_matrix_to_matrix(other, *this);
   }
 
@@ -113,32 +118,38 @@ class Matrix : public details::matrix_tag {
     return storage_.data();
   }
 
-  constexpr static std::size_t num_rows_static() { return NumRows; }
-  constexpr static std::size_t num_cols_static() { return NumCols; }
+  constexpr static auto num_rows_compile_time = NumRows;
+  constexpr static auto num_cols_compile_time = NumCols;
+  constexpr static auto num_rows_hint =
+      NumRows != Dynamic ? NumRows : Policy::NumRowsHint;
+  constexpr static auto num_cols_hint =
+      NumCols != Dynamic ? NumCols : Policy::NumColsHint;
+
   [[nodiscard]] constexpr std::size_t num_rows() const {
-    if constexpr (num_rows_static() != Dynamic)
-      return num_rows_static();
+    if constexpr (num_rows_compile_time != Dynamic)
+      return num_rows_compile_time;
     else
       return storage_.num_rows();
   }
   [[nodiscard]] constexpr std::size_t num_cols() const {
-    if constexpr (num_cols_static() != Dynamic)
-      return num_cols_static();
+    if constexpr (num_cols_compile_time != Dynamic)
+      return num_cols_compile_time;
     else
       return storage_.num_cols();
   }
 
   void resize(std::size_t new_num_rows, std::size_t new_num_cols) {
-    static_assert(num_rows_static() == Dynamic || num_cols_static() == Dynamic,
-                  "Cannot resize a static-sized matrix");
+    static_assert(
+        num_rows_compile_time == Dynamic || num_cols_compile_time == Dynamic,
+        "Cannot resize a static-sized matrix");
 
-    if constexpr (num_rows_static() != Dynamic) {
-      assert(new_num_rows == num_rows_static());
-      new_num_rows = num_rows_static();
+    if constexpr (num_rows_compile_time != Dynamic) {
+      assert(new_num_rows == num_rows_compile_time);
+      new_num_rows = num_rows_compile_time;
     }
-    if constexpr (num_cols_static() != Dynamic) {
-      assert(new_num_cols == num_cols_static());
-      new_num_cols = num_cols_static();
+    if constexpr (num_cols_compile_time != Dynamic) {
+      assert(new_num_cols == num_cols_compile_time);
+      new_num_cols = num_cols_compile_time;
     }
 
     storage_.resize(new_num_rows, new_num_cols);
@@ -146,14 +157,14 @@ class Matrix : public details::matrix_tag {
 
  private:
   using storage_type = std::conditional_t<
-      num_rows_static() != Dynamic && num_cols_static() != Dynamic,
+      num_rows_compile_time != Dynamic && num_cols_compile_time != Dynamic,
       details::MatrixStaticStorage<ValueType, NumRows, NumCols>,
       details::MatrixDynamicStorage<ValueType>>;
   storage_type storage_;
 
   [[nodiscard]] constexpr std::size_t linear_index(std::size_t i,
                                                    std::size_t j) const {
-    if constexpr (Order == StorageOrder::RowMajor) {
+    if constexpr (Policy::Order == StorageOrder::RowMajor) {
       return i * num_cols() + j;
     } else {  // StorageOrder::ColumnMajor
       return i + j * num_rows();
@@ -171,8 +182,8 @@ template <typename Expr,
               details::is_expression_literal_v<std::decay_t<Expr>> &&
               details::is_matrix_v<Expr>>>
 Matrix(Expr&& expr) -> Matrix<typename std::decay_t<Expr>::value_type,
-                              std::decay_t<Expr>::num_rows_static(),
-                              std::decay_t<Expr>::num_cols_static()>;
+                              std::decay_t<Expr>::num_rows_compile_time,
+                              std::decay_t<Expr>::num_cols_compile_time>;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 constexpr decltype(auto) make_matrix(

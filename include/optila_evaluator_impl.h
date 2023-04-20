@@ -115,17 +115,18 @@ class Evaluator<
   using Base::Base;
 
   using result_type = Matrix<typename ExprTraits::value_type,
-                             std::decay_t<ExprTraits>::num_rows_static(),
-                             std::decay_t<ExprTraits>::num_cols_static(),
-                             StorageOrder::RowMajor>;
+                             std::decay_t<ExprTraits>::num_rows_compile_time,
+                             std::decay_t<ExprTraits>::num_cols_compile_time,
+                             DefaultMatrixPolicy>;
 
-  constexpr static std::size_t num_rows_static() {
-    return std::decay_t<ExprTraits>::num_rows_static();
-  }
-
-  constexpr static std::size_t num_cols_static() {
-    return std::decay_t<ExprTraits>::num_cols_static();
-  }
+  constexpr static std::size_t num_rows_compile_time =
+      std::decay_t<ExprTraits>::num_rows_compile_time;
+  constexpr static std::size_t num_cols_compile_time =
+      std::decay_t<ExprTraits>::num_cols_compile_time;
+  constexpr static std::size_t num_rows_hint =
+      std::decay_t<ExprTraits>::num_rows_hint;
+  constexpr static std::size_t num_cols_hint =
+      std::decay_t<ExprTraits>::num_cols_hint;
 
   [[nodiscard]] constexpr std::size_t num_rows() const {
     return Base::expr().num_rows();
@@ -151,9 +152,9 @@ class Evaluator<
   }
 
   template <typename OtherValueType, std::size_t OtherNumRows,
-            std::size_t OtherNumCols, StorageOrder OtherOrder>
+            std::size_t OtherNumCols, typename OtherPolicy>
   constexpr void evaluate_into(Matrix<OtherValueType, OtherNumRows,
-                                      OtherNumCols, OtherOrder>& dest) const {
+                                      OtherNumCols, OtherPolicy>& dest) const {
     using CommonValueType =
         details::common_value_type_t<typename ExprTraits::value_type,
                                      OtherValueType>;
@@ -170,23 +171,24 @@ class Evaluator<
 };
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          StorageOrder Order>
-class Evaluator<Matrix<ValueType, NumRows, NumCols, Order>>
-    : public BaseEvaluator<Matrix<ValueType, NumRows, NumCols, Order>>,
+          typename Policy>
+class Evaluator<Matrix<ValueType, NumRows, NumCols, Policy>>
+    : public BaseEvaluator<Matrix<ValueType, NumRows, NumCols, Policy>>,
       public details::matrix_tag {
   using matrix_storage_type = details::efficient_type_qualifiers_t<
-      Matrix<ValueType, NumRows, NumCols, Order>>;
+      Matrix<ValueType, NumRows, NumCols, Policy>>;
 
  public:
-  using result_type = Matrix<ValueType, NumRows, NumCols, Order>;
+  using result_type = Matrix<ValueType, NumRows, NumCols, Policy>;
 
   constexpr explicit Evaluator(matrix_storage_type value)
       : m_value(std::move(value)) {}
   constexpr explicit Evaluator(result_type&&) = delete;
 
-  constexpr static std::size_t num_rows_static() { return NumRows; }
-
-  constexpr static std::size_t num_cols_static() { return NumCols; }
+  constexpr static auto num_rows_compile_time = NumRows;
+  constexpr static auto num_cols_compile_time = NumCols;
+  constexpr static auto num_rows_hint = Policy::NumRowsHint;
+  constexpr static auto num_cols_hint = Policy::NumColsHint;
 
   [[nodiscard]] constexpr std::size_t num_rows() const {
     return m_value.num_rows();
@@ -203,9 +205,9 @@ class Evaluator<Matrix<ValueType, NumRows, NumCols, Order>>
   constexpr matrix_storage_type evaluate() const { return m_value; }
 
   template <typename OtherValueType, std::size_t OtherNumRows,
-            std::size_t OtherNumCols, StorageOrder OtherOrder>
+            std::size_t OtherNumCols, typename OtherPolicy>
   constexpr void evaluate_into(Matrix<OtherValueType, OtherNumRows,
-                                      OtherNumCols, OtherOrder>& dest) const {
+                                      OtherNumCols, OtherPolicy>& dest) const {
     dest = m_value;
   }
 
@@ -246,9 +248,9 @@ template <typename Expr,
 Evaluator(const Expr& expr) -> Evaluator<Expr>;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          StorageOrder Order>
-Evaluator(const Matrix<ValueType, NumRows, NumCols, Order>& expr)
-    -> Evaluator<Matrix<ValueType, NumRows, NumCols, Order>>;
+          typename Policy>
+Evaluator(const Matrix<ValueType, NumRows, NumCols, Policy>& expr)
+    -> Evaluator<Matrix<ValueType, NumRows, NumCols, Policy>>;
 
 template <typename ValueType>
 Evaluator(const Scalar<ValueType>& expr) -> Evaluator<Scalar<ValueType>>;
