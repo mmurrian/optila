@@ -7,7 +7,6 @@
 #include "details/optila_scalar.h"
 #include "details/optila_type_traits.h"
 #include "optila_expression_traits_impl.h"
-#include "optila_scalar_impl.h"
 
 namespace optila {
 
@@ -18,7 +17,8 @@ class ExpressionImpl;
 template <typename Op, typename... Operands>
 class ExpressionImpl<details::matrix_tag, Op, Operands...>
     : public details::matrix_tag {
-  using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
+  using Expr = Expression<Op, Operands...>;
+  using ExprTraits = ExpressionTraits<Expr>;
 
   using Derived = Expression<Op, Operands...>;
   constexpr Derived& derived() { return static_cast<Derived&>(*this); }
@@ -27,10 +27,6 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
   }
 
  public:
-  using value_type = typename ExprTraits::value_type;
-  using result_type =
-      Matrix<value_type, ExprTraits::num_rows_compile_time,
-             ExprTraits::num_cols_compile_time, DefaultMatrixPolicy>;
   constexpr static auto num_rows_compile_time =
       ExprTraits::num_rows_compile_time;
   constexpr static auto num_cols_compile_time =
@@ -49,33 +45,26 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
 // Partial specialization for scalar_tag
 template <typename Op, typename... Operands>
 class ExpressionImpl<details::scalar_tag, Op, Operands...>
-    : public details::scalar_tag {
-  using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
-
- public:
-  using value_type = typename ExprTraits::value_type;
-  using result_type = Scalar<value_type>;
-};
+    : public details::scalar_tag {};
 
 template <typename Op, typename... Operands>
 class Expression
     : public ExpressionImpl<typename ExpressionTraits<
-                                Op, std::decay_t<Operands>...>::expression_type,
+                                Expression<Op, Operands...>>::expression_type,
                             Op, Operands...> {
-  using Base = ExpressionImpl<
-      typename ExpressionTraits<Op, std::decay_t<Operands>...>::expression_type,
-      Op, Operands...>;
+  using Expr = Expression<Op, Operands...>;
+  using ExprTraits = ExpressionTraits<Expr>;
 
   using operand_storage_type =
       std::tuple<details::safe_type_qualifiers_t<Operands>...>;
 
  public:
-  using value_type = typename Base::value_type;
-  using result_type = typename Base::result_type;
+  using value_type = typename ExprTraits::value_type;
+  using result_type = typename ExprTraits::result_type;
 
   constexpr explicit Expression(Operands&&... operands)
       : m_operands(std::forward<Operands>(operands)...) {
-    using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
+    using ExprTraits = ExpressionTraits<Expr>;
     if constexpr (std::conjunction_v<
                       details::is_static_expression<Operands>...>) {
       ExprTraits::static_validate();

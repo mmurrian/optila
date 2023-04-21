@@ -4,19 +4,22 @@
 #include "details/optila_matrix.h"
 #include "details/optila_scalar.h"
 #include "details/optila_type_traits.h"
+#include "optila_evaluator_policy_impl.h"
 #include "optila_expression_impl.h"
 #include "optila_expression_traits_impl.h"
 
 namespace optila {
 
-template <typename Expr, typename Enable = void>
+template <typename Expr, typename EvaluatorPolicy = DefaultEvaluatorPolicy<>,
+          typename Enable = void>
 class Evaluator;
 
-template <typename Expr>
-class BaseEvaluator {};
+template <typename Expr, typename EvaluatorPolicy>
+class LazyEvaluatorBase {};
 
-template <typename Op, typename... Operands>
-class BaseEvaluator<Expression<Op, Operands...>> {
+template <typename Op, typename... Operands, typename EvaluatorPolicy>
+class LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy> {
+  using Expr = Expression<Op, Operands...>;
   // Accept and store the expression by value if is it small and trivial.
   // Otherwise, accept and store it by const reference.
   //
@@ -27,12 +30,32 @@ class BaseEvaluator<Expression<Op, Operands...>> {
   using expression_storage_type =
       details::efficient_type_qualifiers_t<Expression<Op, Operands...>>;
 
-  using operands_storage_type =
-      std::tuple<Evaluator<std::decay_t<Operands>>...>;
+  template <typename OperandsTuple, std::size_t... Is>
+  constexpr static decltype(auto) make_nested_evaluators(
+      OperandsTuple&& operands, std::index_sequence<Is...>) {
+    return std::make_tuple(
+        Evaluator<
+            std::decay_t<std::tuple_element_t<Is, std::decay_t<OperandsTuple>>>,
+            typename EvaluatorPolicy::template operand_policy_type<Expr, Is>>(
+            std::get<Is>(operands))...);
+  }
+
+  template <typename OperandsTuple>
+  constexpr static decltype(auto) make_nested_evaluators(
+      OperandsTuple&& operands) {
+    return make_nested_evaluators(
+        std::forward<OperandsTuple>(operands),
+        std::make_index_sequence<
+            std::tuple_size_v<std::decay_t<OperandsTuple>>>{});
+  }
+
+  using operands_storage_type = std::decay_t<decltype(make_nested_evaluators(
+      std::declval<expression_storage_type>().operands()))>;
 
  public:
-  constexpr explicit BaseEvaluator(expression_storage_type expr)
-      : m_expr(std::move(expr)), m_nested(m_expr.operands()) {}
+  constexpr explicit LazyEvaluatorBase(expression_storage_type expr)
+      : m_expr(std::move(expr)),
+        m_nested(make_nested_evaluators(m_expr.operands())) {}
 
   // Deleted constructor for rvalue references. Evaluators shall not be
   // constructed from temporary expressions. What this means is that this is
@@ -50,7 +73,7 @@ class BaseEvaluator<Expression<Op, Operands...>> {
   //
   // Users shouldn't be directly interacting with Evaluators anyways so this is
   // more of a note for myself.
-  BaseEvaluator(Expression<Op, Operands...>&&) = delete;
+  LazyEvaluatorBase(Expression<Op, Operands...>&&) = delete;
 
  protected:
   constexpr decltype(auto) expr() const { return m_expr; }
@@ -64,69 +87,29 @@ class BaseEvaluator<Expression<Op, Operands...>> {
   operands_storage_type m_nested;
 };
 
-template <typename Op, typename... Operands>
+// Matrix expression lazy evaluator.
+template <typename Op, typename... Operands, typename EvaluatorPolicy>
 class Evaluator<
-    Expression<Op, Operands...>,
-    std::enable_if_t<details::is_scalar_v<Expression<Op, Operands...>>>>
-    : public BaseEvaluator<Expression<Op, Operands...>>,
-      public details::scalar_tag {
-  using Base = BaseEvaluator<Expression<Op, Operands...>>;
-
-  using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
-
- public:
-  using Base::Base;
-
-  using result_type = Scalar<typename ExprTraits::value_type>;
-
-  constexpr decltype(auto) operator()() const {
-    return std::apply(Op::to_scalar, Base::operands());
-  }
-
-  constexpr result_type evaluate() const {
-    result_type result{};
-    this->evaluate_into(result);
-    return result;
-  }
-
-  template <typename OtherValueType>
-  constexpr void evaluate_into(Scalar<OtherValueType>& dest) const {
-#ifndef OPTILA_ENABLE_IMPLICIT_CONVERSIONS
-    static_assert(
-        std::is_same_v<typename ExprTraits::value_type, OtherValueType>,
-        "Implicit conversions are disabled. Use explicit conversions to "
-        "convert between types.");
-#endif
-    dest = Scalar<OtherValueType>(static_cast<OtherValueType>((*this)()));
-  }
-};
-
-template <typename Op, typename... Operands>
-class Evaluator<
-    Expression<Op, Operands...>,
-    std::enable_if_t<details::is_matrix_v<Expression<Op, Operands...>>>>
-    : public BaseEvaluator<Expression<Op, Operands...>>,
+    Expression<Op, Operands...>, EvaluatorPolicy,
+    std::enable_if_t<details::is_matrix_v<Expression<Op, Operands...>> &&
+                     EvaluatorPolicy::lazy_evaluation>>
+    : public LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>,
       public details::matrix_tag {
-  using Base = BaseEvaluator<Expression<Op, Operands...>>;
+  using Base = LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>;
 
-  using ExprTraits = ExpressionTraits<Op, std::decay_t<Operands>...>;
+  using Expr = Expression<Op, Operands...>;
+  using ExprTraits = ExpressionTraits<Expr>;
+  using result_type = typename ExprTraits::result_type;
 
  public:
   using Base::Base;
 
-  using result_type = Matrix<typename ExprTraits::value_type,
-                             std::decay_t<ExprTraits>::num_rows_compile_time,
-                             std::decay_t<ExprTraits>::num_cols_compile_time,
-                             DefaultMatrixPolicy>;
-
-  constexpr static std::size_t num_rows_compile_time =
+  constexpr static auto num_rows_compile_time =
       std::decay_t<ExprTraits>::num_rows_compile_time;
-  constexpr static std::size_t num_cols_compile_time =
+  constexpr static auto num_cols_compile_time =
       std::decay_t<ExprTraits>::num_cols_compile_time;
-  constexpr static std::size_t num_rows_hint =
-      std::decay_t<ExprTraits>::num_rows_hint;
-  constexpr static std::size_t num_cols_hint =
-      std::decay_t<ExprTraits>::num_cols_hint;
+  constexpr static auto num_rows_hint = std::decay_t<ExprTraits>::num_rows_hint;
+  constexpr static auto num_cols_hint = std::decay_t<ExprTraits>::num_cols_hint;
 
   [[nodiscard]] constexpr std::size_t num_rows() const {
     return Base::expr().num_rows();
@@ -170,25 +153,150 @@ class Evaluator<
   }
 };
 
-template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          typename Policy>
-class Evaluator<Matrix<ValueType, NumRows, NumCols, Policy>>
-    : public BaseEvaluator<Matrix<ValueType, NumRows, NumCols, Policy>>,
-      public details::matrix_tag {
-  using matrix_storage_type = details::efficient_type_qualifiers_t<
-      Matrix<ValueType, NumRows, NumCols, Policy>>;
+// Matrix expression eager evaluator.
+template <typename Op, typename... Operands, typename EvaluatorPolicy>
+class Evaluator<
+    Expression<Op, Operands...>, EvaluatorPolicy,
+    std::enable_if_t<details::is_matrix_v<Expression<Op, Operands...>> &&
+                     !EvaluatorPolicy::lazy_evaluation>>
+    : public details::matrix_tag {
+  using Expr = Expression<Op, Operands...>;
+  using ExprTraits = ExpressionTraits<Expr>;
+  using result_type = typename ExprTraits::result_type;
+
+  using expression_storage_type = details::efficient_type_qualifiers_t<Expr>;
+
+  result_type m_result;
 
  public:
-  using result_type = Matrix<ValueType, NumRows, NumCols, Policy>;
+  constexpr Evaluator(expression_storage_type expr)
+      : m_result(Evaluator<std::decay_t<Expr>, LazyEvaluatorPolicy>(expr)
+                     .evaluate()) {}
 
-  constexpr explicit Evaluator(matrix_storage_type value)
+  constexpr static auto num_rows_compile_time =
+      result_type::num_rows_compile_time;
+  constexpr static auto num_cols_compile_time =
+      result_type::num_cols_compile_time;
+  constexpr static auto num_rows_hint = result_type::num_rows_hint;
+  constexpr static auto num_cols_hint = result_type::num_cols_hint;
+
+  [[nodiscard]] constexpr std::size_t num_rows() const {
+    return m_result.num_rows();
+  }
+
+  [[nodiscard]] constexpr std::size_t num_cols() const {
+    return m_result.num_cols();
+  }
+
+  constexpr decltype(auto) operator()(std::size_t i, std::size_t j) const {
+    return m_result(i, j);
+  }
+
+  constexpr result_type evaluate() const {
+    result_type result{};
+    this->evaluate_into(result);
+    return result;
+  }
+
+  template <typename OtherValueType, std::size_t OtherNumRows,
+            std::size_t OtherNumCols, typename OtherPolicy>
+  constexpr void evaluate_into(Matrix<OtherValueType, OtherNumRows,
+                                      OtherNumCols, OtherPolicy>& dest) const {
+    dest = m_result;
+  }
+};
+
+// Scalar expression lazy evaluator.
+template <typename Op, typename... Operands, typename EvaluatorPolicy>
+class Evaluator<
+    Expression<Op, Operands...>, EvaluatorPolicy,
+    std::enable_if_t<details::is_scalar_v<Expression<Op, Operands...>> &&
+                     EvaluatorPolicy::lazy_evaluation>>
+    : public LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>,
+      public details::scalar_tag {
+  using Base = LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>;
+
+  using Expr = Expression<Op, Operands...>;
+  using ExprTraits = ExpressionTraits<Expr>;
+  using result_type = typename ExprTraits::result_type;
+
+ public:
+  using Base::Base;
+
+  constexpr decltype(auto) operator()() const {
+    return std::apply(Op::to_scalar, Base::operands());
+  }
+
+  constexpr result_type evaluate() const {
+    result_type result{};
+    this->evaluate_into(result);
+    return result;
+  }
+
+  template <typename OtherValueType>
+  constexpr void evaluate_into(Scalar<OtherValueType>& dest) const {
+#ifndef OPTILA_ENABLE_IMPLICIT_CONVERSIONS
+    static_assert(
+        std::is_same_v<typename ExprTraits::value_type, OtherValueType>,
+        "Implicit conversions are disabled. Use explicit conversions to "
+        "convert between types.");
+#endif
+    dest = Scalar<OtherValueType>(static_cast<OtherValueType>((*this)()));
+  }
+};
+
+// Scalar expression eager evaluator.
+template <typename Op, typename... Operands, typename EvaluatorPolicy>
+class Evaluator<
+    Expression<Op, Operands...>, EvaluatorPolicy,
+    std::enable_if_t<details::is_scalar_v<Expression<Op, Operands...>> &&
+                     !EvaluatorPolicy::lazy_evaluation>>
+    : public details::scalar_tag {
+  using Expr = Expression<Op, Operands...>;
+  using ExprTraits = ExpressionTraits<Expr>;
+  using value_type = typename ExprTraits::value_type;
+  using result_type = typename ExprTraits::result_type;
+  using expression_type = details::efficient_type_qualifiers_t<Expr>;
+
+  result_type m_result;
+
+ public:
+  constexpr Evaluator(expression_type expr)
+      : m_result(Evaluator<std::decay_t<Expr>, LazyEvaluatorPolicy>(expr)
+                     .evaluate()) {}
+
+  constexpr decltype(auto) operator()() const { return m_result(); }
+
+  constexpr value_type evaluate() const { return m_result(); }
+
+  template <typename OtherValueType>
+  constexpr void evaluate_into(OtherValueType& dest) const {
+    using CommonValueType =
+        details::common_value_type_t<value_type, OtherValueType>;
+    dest = static_cast<CommonValueType>(m_result());
+  }
+};
+
+template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
+          typename MatrixPolicy, typename EvaluatorPolicy>
+class Evaluator<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>,
+                EvaluatorPolicy> : public details::matrix_tag {
+  using Expr = Matrix<ValueType, NumRows, NumCols, MatrixPolicy>;
+  using ExprTraits = ExpressionTraits<Expr>;
+  using result_type = typename ExprTraits::result_type;
+  using result_storage_type = details::efficient_type_qualifiers_t<result_type>;
+
+ public:
+  constexpr explicit Evaluator(result_storage_type value)
       : m_value(std::move(value)) {}
   constexpr explicit Evaluator(result_type&&) = delete;
 
-  constexpr static auto num_rows_compile_time = NumRows;
-  constexpr static auto num_cols_compile_time = NumCols;
-  constexpr static auto num_rows_hint = Policy::NumRowsHint;
-  constexpr static auto num_cols_hint = Policy::NumColsHint;
+  constexpr static auto num_rows_compile_time =
+      std::decay_t<ExprTraits>::num_rows_compile_time;
+  constexpr static auto num_cols_compile_time =
+      std::decay_t<ExprTraits>::num_cols_compile_time;
+  constexpr static auto num_rows_hint = std::decay_t<ExprTraits>::num_rows_hint;
+  constexpr static auto num_cols_hint = std::decay_t<ExprTraits>::num_cols_hint;
 
   [[nodiscard]] constexpr std::size_t num_rows() const {
     return m_value.num_rows();
@@ -202,7 +310,7 @@ class Evaluator<Matrix<ValueType, NumRows, NumCols, Policy>>
     return m_value(i, j);
   }
 
-  constexpr matrix_storage_type evaluate() const { return m_value; }
+  constexpr result_storage_type evaluate() const { return m_value; }
 
   template <typename OtherValueType, std::size_t OtherNumRows,
             std::size_t OtherNumCols, typename OtherPolicy>
@@ -212,19 +320,19 @@ class Evaluator<Matrix<ValueType, NumRows, NumCols, Policy>>
   }
 
  private:
-  matrix_storage_type m_value;
+  result_storage_type m_value;
 };
 
-template <typename ValueType>
-class Evaluator<Scalar<ValueType>> : public BaseEvaluator<Scalar<ValueType>>,
-                                     public details::scalar_tag {
-  using scalar_storage_type =
-      details::efficient_type_qualifiers_t<Scalar<ValueType>>;
+template <typename ValueType, typename EvaluatorPolicy>
+class Evaluator<Scalar<ValueType>, EvaluatorPolicy>
+    : public details::scalar_tag {
+  using Expr = Scalar<ValueType>;
+  using ExprTraits = ExpressionTraits<Expr>;
+  using result_type = typename ExprTraits::result_type;
+  using result_storage_type = details::efficient_type_qualifiers_t<result_type>;
 
  public:
-  using result_type = Scalar<ValueType>;
-
-  constexpr explicit Evaluator(scalar_storage_type value)
+  constexpr explicit Evaluator(result_storage_type value)
       : m_value(std::move(value)) {}
   constexpr Evaluator(result_type&&) = delete;
 
@@ -240,7 +348,7 @@ class Evaluator<Scalar<ValueType>> : public BaseEvaluator<Scalar<ValueType>>,
   }
 
  private:
-  scalar_storage_type m_value;
+  result_storage_type m_value;
 };
 
 template <typename Expr,
@@ -248,9 +356,9 @@ template <typename Expr,
 Evaluator(const Expr& expr) -> Evaluator<Expr>;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          typename Policy>
-Evaluator(const Matrix<ValueType, NumRows, NumCols, Policy>& expr)
-    -> Evaluator<Matrix<ValueType, NumRows, NumCols, Policy>>;
+          typename MatrixPolicy>
+Evaluator(const Matrix<ValueType, NumRows, NumCols, MatrixPolicy>& expr)
+    -> Evaluator<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>>;
 
 template <typename ValueType>
 Evaluator(const Scalar<ValueType>& expr) -> Evaluator<Scalar<ValueType>>;

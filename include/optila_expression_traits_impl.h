@@ -5,34 +5,84 @@
 #include <ratio>
 #include <type_traits>
 
+#include "details/optila_expression.h"
 #include "details/optila_matrix.h"
 #include "details/optila_scalar.h"
 #include "details/optila_type_traits.h"
+#include "optila_expression_cost_impl.h"
 #include "optila_operation_impl.h"
 
 namespace optila {
 
-template <std::size_t Additions, std::size_t Multiplications,
-          std::size_t Divisions = 0, std::size_t PowerAndRoot = 0,
-          bool ExpensiveOperation = false>
-struct OperationCounts {
-  using number_additions = std::integral_constant<std::size_t, Additions>;
-  using number_multiplications =
-      std::integral_constant<std::size_t, Multiplications>;
-  using number_divisions = std::integral_constant<std::size_t, Divisions>;
-  using number_power_and_root =
-      std::integral_constant<std::size_t, PowerAndRoot>;
-  using expensive_operation = std::integral_constant<bool, ExpensiveOperation>;
-};
-
-template <typename Op, typename... Operands>
+template <typename Expr>
 struct ExpressionTraits;
 
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::ScalarAddition, Lhs, Rhs> {
+template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
+          typename MatrixPolicy>
+struct ExpressionTraits<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>> {
+ private:
+  using Expr = Matrix<ValueType, NumRows, NumCols, MatrixPolicy>;
+
+ public:
+  using expression_type = details::matrix_tag;
+  using value_type = typename Expr::value_type;
+
+  constexpr static auto num_rows_compile_time = Expr::num_rows_compile_time;
+  constexpr static auto num_cols_compile_time = Expr::num_cols_compile_time;
+  constexpr static auto num_rows_hint = Expr::num_rows_hint;
+  constexpr static auto num_cols_hint = Expr::num_cols_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, MatrixPolicy>;
+
+  using operand_coefficient_ratio = std::tuple<>;
+  using operation_counts = OperationCounts<>;
+
+  constexpr static auto num_rows() {
+    static_assert(num_rows_compile_time != Dynamic);
+    return num_rows_compile_time;
+  }
+
+  constexpr static auto num_cols() {
+    static_assert(num_cols_compile_time != Dynamic);
+    return num_cols_compile_time;
+  }
+
+  constexpr static void static_validate() {}
+
+  constexpr static void dynamic_validate() {}
+};
+
+template <typename ValueType>
+struct ExpressionTraits<Scalar<ValueType>> {
+ private:
+  using Expr = Scalar<ValueType>;
+
+ public:
+  using expression_type = details::scalar_tag;
+  using value_type = typename Expr::value_type;
+  using result_type = Scalar<value_type>;
+
+  using operand_coefficient_ratio = std::tuple<>;
+  using operation_counts = OperationCounts<>;
+
+  constexpr static void static_validate() {}
+
+  constexpr static void dynamic_validate() {}
+};
+
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<
+    Expression<Operation::ScalarAddition, LhsType, RhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::scalar_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
+  using result_type = Scalar<value_type>;
   // Each operand coefficient is accessed once in evaluation
   using operand_coefficient_ratio = std::tuple<std::ratio<1>, std::ratio<1>>;
   using operation_counts = OperationCounts<1, 0>;
@@ -41,8 +91,14 @@ struct ExpressionTraits<Operation::ScalarAddition, Lhs, Rhs> {
                 "Mismatched operands for scalar addition");
 };
 
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::Addition, Lhs, Rhs> : details::matrix_tag {
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<Expression<Operation::Addition, LhsType, RhsType>>
+    : details::matrix_tag {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
@@ -51,6 +107,9 @@ struct ExpressionTraits<Operation::Addition, Lhs, Rhs> : details::matrix_tag {
   constexpr static auto num_cols_compile_time = Lhs::num_cols_compile_time;
   constexpr static auto num_rows_hint = Lhs::num_rows_hint;
   constexpr static auto num_cols_hint = Lhs::num_cols_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
 
   // Each operand coefficient is accessed once in evaluation
   using operand_coefficient_ratio = std::tuple<std::ratio<1>, std::ratio<1>>;
@@ -79,11 +138,18 @@ struct ExpressionTraits<Operation::Addition, Lhs, Rhs> : details::matrix_tag {
   }
 };
 
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::ScalarSubtraction, Lhs, Rhs> {
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<
+    Expression<Operation::ScalarSubtraction, LhsType, RhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::scalar_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
+  using result_type = Scalar<value_type>;
   // Each operand coefficient is accessed once in evaluation
   using operand_coefficient_ratio = std::tuple<std::ratio<1>, std::ratio<1>>;
   using operation_counts = OperationCounts<1, 0>;
@@ -92,9 +158,14 @@ struct ExpressionTraits<Operation::ScalarSubtraction, Lhs, Rhs> {
                 "Mismatched operands for scalar subtraction");
 };
 
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::Subtraction, Lhs, Rhs>
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<Expression<Operation::Subtraction, LhsType, RhsType>>
     : details::matrix_tag {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
@@ -103,6 +174,9 @@ struct ExpressionTraits<Operation::Subtraction, Lhs, Rhs>
   constexpr static auto num_cols_compile_time = Lhs::num_cols_compile_time;
   constexpr static auto num_rows_hint = Lhs::num_rows_hint;
   constexpr static auto num_cols_hint = Lhs::num_cols_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
 
   constexpr static auto num_rows(const Lhs& lhs, const Rhs& /*rhs*/) {
     return lhs.num_rows();
@@ -132,8 +206,13 @@ struct ExpressionTraits<Operation::Subtraction, Lhs, Rhs>
 };
 
 // Scalar-Matrix multiplication
-template <typename Lhs, typename Rhs>
+template <typename LhsType, typename RhsType>
 struct ScalarMatrixMultiplicationExpressionTraits {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
@@ -142,6 +221,9 @@ struct ScalarMatrixMultiplicationExpressionTraits {
   constexpr static auto num_cols_compile_time = Rhs::num_cols_compile_time;
   constexpr static auto num_rows_hint = Rhs::num_rows_hint;
   constexpr static auto num_cols_hint = Rhs::num_cols_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
 
   constexpr static auto num_rows(const Lhs& /*lhs*/, const Rhs& rhs) {
     return rhs.num_rows();
@@ -165,8 +247,13 @@ struct ScalarMatrixMultiplicationExpressionTraits {
   }
 };
 
-template <typename Lhs, typename Rhs>
+template <typename LhsType, typename RhsType>
 struct MatrixScalarMultiplicationExpressionTraits {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
@@ -175,6 +262,9 @@ struct MatrixScalarMultiplicationExpressionTraits {
   constexpr static auto num_cols_compile_time = Lhs::num_cols_compile_time;
   constexpr static auto num_rows_hint = Lhs::num_rows_hint;
   constexpr static auto num_cols_hint = Lhs::num_cols_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
 
   constexpr static auto num_rows(const Lhs& lhs, const Rhs& /* rhs */) {
     return lhs.num_rows();
@@ -199,8 +289,13 @@ struct MatrixScalarMultiplicationExpressionTraits {
 };
 
 // Matrix multiplication
-template <typename Lhs, typename Rhs>
+template <typename LhsType, typename RhsType>
 struct MatrixMultiplicationExpressionTraits {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
@@ -210,10 +305,13 @@ struct MatrixMultiplicationExpressionTraits {
   constexpr static auto num_rows_hint = Lhs::num_rows_hint;
   constexpr static auto num_cols_hint = Rhs::num_cols_hint;
 
-  constexpr static auto num_rows(const Lhs& lhs, const Rhs& rhs) {
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
+
+  constexpr static auto num_rows(const Lhs& lhs, const Rhs& /*rhs*/) {
     return lhs.num_rows();
   }
-  constexpr static auto num_cols(const Lhs& lhs, const Rhs& rhs) {
+  constexpr static auto num_cols(const Lhs& /*lhs*/, const Rhs& rhs) {
     return rhs.num_cols();
   }
 
@@ -246,21 +344,28 @@ struct MatrixMultiplicationExpressionTraits {
   }
 };
 
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::Multiplication, Lhs, Rhs>
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<Expression<Operation::Multiplication, LhsType, RhsType>>
     : std::conditional_t<
-          details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs>,
-          MatrixMultiplicationExpressionTraits<Lhs, Rhs>,
+          details::is_matrix_v<LhsType> && details::is_matrix_v<RhsType>,
+          MatrixMultiplicationExpressionTraits<LhsType, RhsType>,
           std::conditional_t<
-              details::is_scalar_v<Lhs> && details::is_matrix_v<Rhs>,
-              ScalarMatrixMultiplicationExpressionTraits<Lhs, Rhs>,
-              MatrixScalarMultiplicationExpressionTraits<Lhs, Rhs>>> {};
+              details::is_scalar_v<LhsType> && details::is_matrix_v<RhsType>,
+              ScalarMatrixMultiplicationExpressionTraits<LhsType, RhsType>,
+              MatrixScalarMultiplicationExpressionTraits<LhsType, RhsType>>> {};
 
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::ScalarMultiplication, Lhs, Rhs> {
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<
+    Expression<Operation::ScalarMultiplication, LhsType, RhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::scalar_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
+  using result_type = Scalar<value_type>;
 
   constexpr static void static_validate() {
     static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
@@ -270,8 +375,14 @@ struct ExpressionTraits<Operation::ScalarMultiplication, Lhs, Rhs> {
   constexpr static void dynamic_validate(const Lhs& lhs, const Rhs& rhs) {}
 };
 
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::MatrixScalarDivision, Lhs, Rhs> {
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<
+    Expression<Operation::MatrixScalarDivision, LhsType, RhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
@@ -280,6 +391,9 @@ struct ExpressionTraits<Operation::MatrixScalarDivision, Lhs, Rhs> {
   constexpr static auto num_cols_compile_time = Lhs::num_cols_compile_time;
   constexpr static auto num_rows_hint = Lhs::num_rows_hint;
   constexpr static auto num_cols_hint = Lhs::num_cols_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
 
   constexpr static auto num_rows(const Lhs& lhs, const Rhs& /*rhs*/) {
     return lhs.num_rows();
@@ -302,12 +416,13 @@ struct ExpressionTraits<Operation::MatrixScalarDivision, Lhs, Rhs> {
 };
 
 // Vector dot product
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::DotProduct, Lhs, Rhs> {
-  using expression_type = details::scalar_tag;
-  using value_type = details::common_value_type_t<typename Lhs::value_type,
-                                                  typename Rhs::value_type>;
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<Expression<Operation::DotProduct, LhsType, RhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
 
+  // These are for the operands of the dot product, not the result.
   constexpr static auto num_rows_compile_time =
       Lhs::num_rows_compile_time != Dynamic ? Lhs::num_rows_compile_time
                                             : Rhs::num_rows_compile_time;
@@ -322,6 +437,12 @@ struct ExpressionTraits<Operation::DotProduct, Lhs, Rhs> {
       num_cols_compile_time != Dynamic
           ? num_cols_compile_time
           : std::min(Lhs::num_cols_hint, Rhs::num_cols_hint);
+
+ public:
+  using expression_type = details::scalar_tag;
+  using value_type = details::common_value_type_t<typename Lhs::value_type,
+                                                  typename Rhs::value_type>;
+  using result_type = Scalar<value_type>;
 
   // Each operand coefficient is accessed once in evaluation
   using operand_coefficient_ratio = std::tuple<std::ratio<1>, std::ratio<1>>;
@@ -345,10 +466,15 @@ struct ExpressionTraits<Operation::DotProduct, Lhs, Rhs> {
 };
 
 // Square root of a scalar
-template <typename Lhs>
-struct ExpressionTraits<Operation::SquareRoot, Lhs> {
+template <typename LhsType>
+struct ExpressionTraits<Expression<Operation::SquareRoot, LhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+
+ public:
   using expression_type = details::scalar_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type>;
+  using result_type = Scalar<value_type>;
 
   static_assert(details::is_scalar_v<Lhs>,
                 "Square root requires a scalar operand");
@@ -364,9 +490,14 @@ struct ExpressionTraits<Operation::SquareRoot, Lhs> {
 
 // Submatrix extraction
 template <std::size_t StartRow, std::size_t StartCol, std::size_t NumRows,
-          std::size_t NumCols, typename Lhs>
-struct ExpressionTraits<
-    Operation::SubmatrixExtraction<StartRow, StartCol, NumRows, NumCols>, Lhs> {
+          std::size_t NumCols, typename LhsType>
+struct ExpressionTraits<Expression<
+    Operation::SubmatrixExtraction<StartRow, StartCol, NumRows, NumCols>,
+    LhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type>;
 
@@ -374,6 +505,9 @@ struct ExpressionTraits<
   constexpr static auto num_cols_compile_time = NumCols;
   constexpr static auto num_rows_hint = NumRows;
   constexpr static auto num_cols_hint = NumCols;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
 
   constexpr static auto num_rows(const Lhs& /*lhs*/) { return NumRows; }
   constexpr static auto num_cols(const Lhs& /*lhs*/) { return NumCols; }
@@ -404,10 +538,17 @@ struct ExpressionTraits<
 };
 
 // Strict equality
-template <typename Lhs, typename Rhs>
-struct ExpressionTraits<Operation::StrictEquality, Lhs, Rhs> {
+template <typename LhsType, typename RhsType>
+struct ExpressionTraits<
+    Expression<Operation::StrictEquality, LhsType, RhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+  using Rhs = std::decay_t<RhsType>;
+
+ public:
   using expression_type = details::scalar_tag;
   using value_type = bool;
+  using result_type = Scalar<value_type>;
 
   // Worst case, all coefficients are accessed in evaluation of a strict
   // equality.
@@ -436,13 +577,18 @@ template <typename Lhs, typename FromType, typename ToType>
 struct ScalarStaticConversionExpressionTraits {
   using expression_type = details::scalar_tag;
   using value_type = ToType;
+  using result_type = Scalar<value_type>;
 
   static_assert(details::is_scalar_v<Lhs>,
                 "Static conversion requires a scalar operand");
 };
 
-template <typename Lhs, typename FromType, typename ToType>
+template <typename LhsType, typename FromType, typename ToType>
 struct MatrixStaticConversionExpressionTraits {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+
+ public:
   using expression_type = details::matrix_tag;
   using value_type = ToType;
 
@@ -450,6 +596,9 @@ struct MatrixStaticConversionExpressionTraits {
   constexpr static auto num_cols_compile_time = Lhs::num_cols_compile_time;
   constexpr static auto num_rows_hint = Lhs::num_rows_hint;
   constexpr static auto num_cols_hint = Lhs::num_cols_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
 
   constexpr static auto num_rows(const Lhs& lhs) { return lhs.num_rows(); }
   constexpr static auto num_cols(const Lhs& lhs) { return lhs.num_cols(); }
@@ -459,13 +608,18 @@ struct MatrixStaticConversionExpressionTraits {
 };
 }  // namespace details
 
-template <typename Lhs, typename FromType, typename ToType>
-struct ExpressionTraits<Operation::StaticConversion<FromType, ToType>, Lhs>
-    : std::conditional_t<details::is_scalar_v<Lhs>,
+template <typename LhsType, typename FromType, typename ToType>
+struct ExpressionTraits<
+    Expression<Operation::StaticConversion<FromType, ToType>, LhsType>>
+    : std::conditional_t<details::is_scalar_v<LhsType>,
                          details::ScalarStaticConversionExpressionTraits<
-                             Lhs, FromType, ToType>,
+                             LhsType, FromType, ToType>,
                          details::MatrixStaticConversionExpressionTraits<
-                             Lhs, FromType, ToType>> {
+                             LhsType, FromType, ToType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+
+ public:
   // Each operand coefficient is accessed once in evaluation
   using operand_coefficient_ratio = std::tuple<std::ratio<1>, std::ratio<1>>;
   using operation_counts = OperationCounts<0, 0, 0, 0>;
