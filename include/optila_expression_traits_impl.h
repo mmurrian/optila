@@ -71,6 +71,39 @@ struct ExpressionTraits<Scalar<ValueType>> {
   constexpr static void dynamic_validate() {}
 };
 
+template <typename LhsType>
+struct ExpressionTraits<Expression<Operation::Transpose, LhsType>> {
+ private:
+  using Lhs = std::decay_t<LhsType>;
+
+ public:
+  using expression_type = details::matrix_tag;
+  using value_type = typename Lhs::value_type;
+
+  constexpr static auto num_rows_compile_time = Lhs::num_cols_compile_time;
+  constexpr static auto num_cols_compile_time = Lhs::num_rows_compile_time;
+  constexpr static auto num_rows_hint = Lhs::num_cols_hint;
+  constexpr static auto num_cols_hint = Lhs::num_rows_hint;
+
+  using result_type = Matrix<value_type, num_rows_compile_time,
+                             num_cols_compile_time, DefaultMatrixPolicy>;
+
+  // Each operand coefficient is accessed once in evaluation
+  using operand_coefficient_ratio = std::tuple<std::ratio<1>, std::ratio<1>>;
+  using operation_counts = OperationCounts<0, 0>;
+
+  constexpr static auto num_rows(const Lhs& lhs) { return lhs.num_cols(); }
+
+  constexpr static auto num_cols(const Lhs& lhs) { return lhs.num_rows(); }
+
+  constexpr static void static_validate() {
+    static_assert(details::is_matrix_v<Lhs>,
+                  "Transpose can only be applied to matrices");
+  }
+
+  constexpr static void dynamic_validate(const Lhs& lhs) {}
+};
+
 template <typename LhsType, typename RhsType>
 struct ExpressionTraits<
     Expression<Operation::ScalarAddition, LhsType, RhsType>> {
@@ -87,8 +120,13 @@ struct ExpressionTraits<
   using operand_coefficient_ratio = std::tuple<std::ratio<1>, std::ratio<1>>;
   using operation_counts = OperationCounts<1, 0>;
 
-  static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
-                "Mismatched operands for scalar addition");
+  constexpr static void static_validate() {
+    static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
+                  "Mismatched operands for scalar addition");
+  }
+
+  constexpr static void dynamic_validate(const Lhs& /*lhs*/,
+                                         const Rhs& /*rhs*/) {}
 };
 
 template <typename LhsType, typename RhsType>

@@ -169,8 +169,12 @@ class Evaluator<
   result_type m_result;
 
  public:
+  static_assert(
+      DefaultEvaluatorPolicy<>::lazy_evaluation,
+      "DefaultEvaluatorPolicy should have lazy_evaluation set to true. "
+      "Otherwise, this constructor will call itself recursively.");
   constexpr Evaluator(expression_storage_type expr)
-      : m_result(Evaluator<std::decay_t<Expr>, LazyEvaluatorPolicy>(expr)
+      : m_result(Evaluator<std::decay_t<Expr>, DefaultEvaluatorPolicy<>>(expr)
                      .evaluate()) {}
 
   constexpr static auto num_rows_compile_time =
