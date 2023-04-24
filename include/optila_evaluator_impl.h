@@ -1,24 +1,26 @@
 #pragma once
 
+#include "details/optila_evaluator.h"
 #include "details/optila_expression.h"
 #include "details/optila_matrix.h"
 #include "details/optila_scalar.h"
 #include "details/optila_type_traits.h"
-#include "optila_evaluator_policy_impl.h"
 #include "optila_expression_impl.h"
 #include "optila_expression_traits_impl.h"
 
 namespace optila {
 
-template <typename Expr, typename EvaluatorPolicy = DefaultEvaluatorPolicy<>,
-          typename Enable = void>
+template <typename Expr, typename Strategy = details::lazy_strategy_tag,
+          typename EvaluatorPolicyChain = void, typename Enable = void>
 class Evaluator;
 
-template <typename Expr, typename EvaluatorPolicy>
+template <typename Expr, typename Strategy, typename EvaluatorPolicyChain>
 class LazyEvaluatorBase {};
 
-template <typename Op, typename... Operands, typename EvaluatorPolicy>
-class LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy> {
+template <typename Op, typename... Operands, typename Strategy,
+          typename EvaluatorPolicyChain>
+class LazyEvaluatorBase<Expression<Op, Operands...>, Strategy,
+                        EvaluatorPolicyChain> {
   using Expr = Expression<Op, Operands...>;
   // Accept and store the expression by value if is it small and trivial.
   // Otherwise, accept and store it by const reference.
@@ -36,7 +38,9 @@ class LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy> {
     return std::make_tuple(
         Evaluator<
             std::decay_t<std::tuple_element_t<Is, std::decay_t<OperandsTuple>>>,
-            typename EvaluatorPolicy::template operand_policy_type<Expr, Is>>(
+            details::next_strategy_t<Strategy>,
+            typename EvaluatorPolicyChain::template operand_policy_type<Expr,
+                                                                        Is>>(
             std::get<Is>(operands))...);
   }
 
@@ -88,14 +92,18 @@ class LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy> {
 };
 
 // Matrix expression lazy evaluator.
-template <typename Op, typename... Operands, typename EvaluatorPolicy>
+template <typename Op, typename... Operands, typename Strategy,
+          typename EvaluatorPolicyChain>
 class Evaluator<
-    Expression<Op, Operands...>, EvaluatorPolicy,
-    std::enable_if_t<details::is_matrix_v<Expression<Op, Operands...>> &&
-                     EvaluatorPolicy::lazy_evaluation>>
-    : public LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>,
+    Expression<Op, Operands...>, Strategy, EvaluatorPolicyChain,
+    std::enable_if_t<
+        details::is_matrix_v<Expression<Op, Operands...>> &&
+        details::use_lazy_strategy_v<Strategy, EvaluatorPolicyChain>>>
+    : public LazyEvaluatorBase<Expression<Op, Operands...>, Strategy,
+                               EvaluatorPolicyChain>,
       public details::matrix_tag {
-  using Base = LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>;
+  using Base = LazyEvaluatorBase<Expression<Op, Operands...>, Strategy,
+                                 EvaluatorPolicyChain>;
 
   using Expr = Expression<Op, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
@@ -154,11 +162,13 @@ class Evaluator<
 };
 
 // Matrix expression eager evaluator.
-template <typename Op, typename... Operands, typename EvaluatorPolicy>
+template <typename Op, typename... Operands, typename Strategy,
+          typename EvaluatorPolicyChain>
 class Evaluator<
-    Expression<Op, Operands...>, EvaluatorPolicy,
-    std::enable_if_t<details::is_matrix_v<Expression<Op, Operands...>> &&
-                     !EvaluatorPolicy::lazy_evaluation>>
+    Expression<Op, Operands...>, Strategy, EvaluatorPolicyChain,
+    std::enable_if_t<
+        details::is_matrix_v<Expression<Op, Operands...>> &&
+        details::use_eager_strategy_v<Strategy, EvaluatorPolicyChain>>>
     : public details::matrix_tag {
   using Expr = Expression<Op, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
@@ -169,12 +179,11 @@ class Evaluator<
   result_type m_result;
 
  public:
-  static_assert(
-      DefaultEvaluatorPolicy<>::lazy_evaluation,
-      "DefaultEvaluatorPolicy should have lazy_evaluation set to true. "
-      "Otherwise, this constructor will call itself recursively.");
   constexpr Evaluator(expression_storage_type expr)
-      : m_result(Evaluator<std::decay_t<Expr>, DefaultEvaluatorPolicy<>>(expr)
+      : m_result(Evaluator<std::decay_t<Expr>,
+                           details::once_and_then_strategy<
+                               details::lazy_strategy_tag, Strategy>,
+                           EvaluatorPolicyChain>(expr)
                      .evaluate()) {}
 
   constexpr static auto num_rows_compile_time =
@@ -211,14 +220,18 @@ class Evaluator<
 };
 
 // Scalar expression lazy evaluator.
-template <typename Op, typename... Operands, typename EvaluatorPolicy>
+template <typename Op, typename... Operands, typename Strategy,
+          typename EvaluatorPolicyChain>
 class Evaluator<
-    Expression<Op, Operands...>, EvaluatorPolicy,
-    std::enable_if_t<details::is_scalar_v<Expression<Op, Operands...>> &&
-                     EvaluatorPolicy::lazy_evaluation>>
-    : public LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>,
+    Expression<Op, Operands...>, Strategy, EvaluatorPolicyChain,
+    std::enable_if_t<
+        details::is_scalar_v<Expression<Op, Operands...>> &&
+        details::use_lazy_strategy_v<Strategy, EvaluatorPolicyChain>>>
+    : public LazyEvaluatorBase<Expression<Op, Operands...>, Strategy,
+                               EvaluatorPolicyChain>,
       public details::scalar_tag {
-  using Base = LazyEvaluatorBase<Expression<Op, Operands...>, EvaluatorPolicy>;
+  using Base = LazyEvaluatorBase<Expression<Op, Operands...>, Strategy,
+                                 EvaluatorPolicyChain>;
 
   using Expr = Expression<Op, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
@@ -250,11 +263,13 @@ class Evaluator<
 };
 
 // Scalar expression eager evaluator.
-template <typename Op, typename... Operands, typename EvaluatorPolicy>
+template <typename Op, typename... Operands, typename Strategy,
+          typename EvaluatorPolicyChain>
 class Evaluator<
-    Expression<Op, Operands...>, EvaluatorPolicy,
-    std::enable_if_t<details::is_scalar_v<Expression<Op, Operands...>> &&
-                     !EvaluatorPolicy::lazy_evaluation>>
+    Expression<Op, Operands...>, Strategy, EvaluatorPolicyChain,
+    std::enable_if_t<
+        details::is_scalar_v<Expression<Op, Operands...>> &&
+        details::use_eager_strategy_v<Strategy, EvaluatorPolicyChain>>>
     : public details::scalar_tag {
   using Expr = Expression<Op, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
@@ -266,7 +281,10 @@ class Evaluator<
 
  public:
   constexpr Evaluator(expression_type expr)
-      : m_result(Evaluator<std::decay_t<Expr>, LazyEvaluatorPolicy>(expr)
+      : m_result(Evaluator<std::decay_t<Expr>,
+                           details::once_and_then_strategy<
+                               details::lazy_strategy_tag, Strategy>,
+                           EvaluatorPolicyChain>(expr)
                      .evaluate()) {}
 
   constexpr decltype(auto) operator()() const { return m_result(); }
@@ -282,9 +300,10 @@ class Evaluator<
 };
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
-          typename MatrixPolicy, typename EvaluatorPolicy>
-class Evaluator<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>,
-                EvaluatorPolicy> : public details::matrix_tag {
+          typename MatrixPolicy, typename Strategy,
+          typename EvaluatorPolicyChain>
+class Evaluator<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>, Strategy,
+                EvaluatorPolicyChain> : public details::matrix_tag {
   using Expr = Matrix<ValueType, NumRows, NumCols, MatrixPolicy>;
   using ExprTraits = ExpressionTraits<Expr>;
   using result_type = typename ExprTraits::result_type;
@@ -327,8 +346,8 @@ class Evaluator<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>,
   result_storage_type m_value;
 };
 
-template <typename ValueType, typename EvaluatorPolicy>
-class Evaluator<Scalar<ValueType>, EvaluatorPolicy>
+template <typename ValueType, typename Strategy, typename EvaluatorPolicyChain>
+class Evaluator<Scalar<ValueType>, Strategy, EvaluatorPolicyChain>
     : public details::scalar_tag {
   using Expr = Scalar<ValueType>;
   using ExprTraits = ExpressionTraits<Expr>;
@@ -355,9 +374,10 @@ class Evaluator<Scalar<ValueType>, EvaluatorPolicy>
   result_storage_type m_value;
 };
 
-template <typename Expr, typename EvaluatorPolicy = DefaultEvaluatorPolicy<>,
+template <typename Expr, typename Strategy = details::lazy_strategy_tag,
+          typename EvaluatorPolicyChain = void,
           typename = std::enable_if_t<details::is_expression_literal_v<Expr>>>
-Evaluator(const Expr& expr) -> Evaluator<Expr, EvaluatorPolicy>;
+Evaluator(const Expr& expr) -> Evaluator<Expr, Strategy, EvaluatorPolicyChain>;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           typename MatrixPolicy>

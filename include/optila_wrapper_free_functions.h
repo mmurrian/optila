@@ -2,6 +2,7 @@
 
 #include <type_traits>
 
+#include "optila_evaluator_impl.h"
 #include "optila_expression_impl.h"
 #include "optila_operation_impl.h"
 #include "optila_optimizer_impl.h"
@@ -89,7 +90,8 @@ constexpr decltype(auto) evaluate(Lhs&& expr) {
   // Accept l-value and r-value expressions but do not std::forward<Expr> to
   // the evaluator. The evaluator does not accept r-value expressions and will
   // not manage the lifetime of the expression.
-  return Evaluator<std::decay_t<Lhs>, optimize_expression_t<Lhs>>(expr)
+  return Evaluator<std::decay_t<Lhs>, details::policy_strategy_tag,
+                   optimize_expression_t<Lhs>>(expr)
       .evaluate();
 }
 

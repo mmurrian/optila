@@ -89,7 +89,8 @@ class Matrix : public details::matrix_tag {
     // Accept l-value and r-value expressions but do not std::forward<Expr> to
     // the evaluator. The evaluator does not accept r-value expressions and will
     // not manage the lifetime of the expression.
-    Evaluator<std::decay_t<Expr>, optimize_expression_t<Expr>>(expr)
+    Evaluator<std::decay_t<Expr>, details::policy_strategy_tag,
+              optimize_expression_t<Expr>>(expr)
         .evaluate_into(*this);
   }
 

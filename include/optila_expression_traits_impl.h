@@ -19,12 +19,17 @@ struct ExpressionOperands;
 
 template <typename Op, typename... Operands>
 struct ExpressionOperands<Expression<Op, Operands...>> {
-  using type = std::tuple<Operands...>;
+  using operation = Op;
+  using operands = std::tuple<Operands...>;
 };
+
+template <typename Expr>
+using ExpressionOperation_t = typename ExpressionOperands<Expr>::operation;
 
 template <typename Expr, std::size_t OperandIndex>
 using ExpressionOperand_t =
-    std::tuple_element_t<OperandIndex, typename ExpressionOperands<Expr>::type>;
+    std::tuple_element_t<OperandIndex,
+                         typename ExpressionOperands<Expr>::operands>;
 
 template <typename Expr>
 struct ExpressionTraits;
