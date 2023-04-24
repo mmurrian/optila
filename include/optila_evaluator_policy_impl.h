@@ -1,19 +1,19 @@
 #pragma once
 
-#include <optila_expression_traits_impl.h>
-
 #include <ratio>
 #include <tuple>
 
+#include "optila_expression_traits_impl.h"
+
 namespace optila {
-template <typename CoefficientRatio>
+template <std::size_t CoefficientRatio>
 struct EvaluatorState {
-  using operand_coefficient_ratio = CoefficientRatio;
+  constexpr static std::size_t operand_coefficient_ratio = CoefficientRatio;
 };
 
 struct RootEvaluatorTag {};
 
-template <typename ParentState = EvaluatorState<std::ratio<1>>,
+template <typename ParentState = EvaluatorState<1>,
           typename ParentExpression = RootEvaluatorTag,
           std::size_t OperandIndex = 0>
 struct DefaultEvaluatorPolicy;
@@ -25,14 +25,12 @@ struct DefaultEvaluatorPolicy {
   using ExprTraits = ExpressionTraits<ParentExpression>;
 
  public:
-  using operand_coefficient_ratio = std::ratio_multiply<
-      typename ParentState::operand_coefficient_ratio,
-      std::tuple_element_t<OperandIndex,
-                           typename ExprTraits::operand_coefficient_ratio>>;
+  constexpr static std::size_t operand_coefficient_ratio =
+      ParentState::operand_coefficient_ratio *
+      std::get<OperandIndex>(ExprTraits::operand_coefficient_ratio);
 
   // TODO: Implement a more thoughtful lazy evaluation policy.
-  constexpr static bool lazy_evaluation =
-      std::ratio_less_equal_v<operand_coefficient_ratio, std::ratio<1>>;
+  constexpr static bool lazy_evaluation = operand_coefficient_ratio <= 1;
 
   // Provides the type for the operand policy of each operand for the current
   // Expression. Here, ParentExpression_ is the parent expression relative to
@@ -47,8 +45,8 @@ struct DefaultEvaluatorPolicy {
 template <typename RootState>
 struct DefaultEvaluatorPolicy<RootState, RootEvaluatorTag, 0> {
  public:
-  using operand_coefficient_ratio =
-      typename RootState::operand_coefficient_ratio;
+  constexpr static std::size_t operand_coefficient_ratio =
+      RootState::operand_coefficient_ratio;
 
   constexpr static bool lazy_evaluation = true;
 

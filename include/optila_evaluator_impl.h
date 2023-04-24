@@ -355,9 +355,9 @@ class Evaluator<Scalar<ValueType>, EvaluatorPolicy>
   result_storage_type m_value;
 };
 
-template <typename Expr,
+template <typename Expr, typename EvaluatorPolicy = DefaultEvaluatorPolicy<>,
           typename = std::enable_if_t<details::is_expression_literal_v<Expr>>>
-Evaluator(const Expr& expr) -> Evaluator<Expr>;
+Evaluator(const Expr& expr) -> Evaluator<Expr, EvaluatorPolicy>;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           typename MatrixPolicy>

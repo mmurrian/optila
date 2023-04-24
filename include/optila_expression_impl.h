@@ -4,23 +4,24 @@
 
 #include "details/optila_expression.h"
 #include "details/optila_matrix.h"
+#include "details/optila_operation.h"
 #include "details/optila_scalar.h"
 #include "details/optila_type_traits.h"
 #include "optila_expression_traits_impl.h"
 
 namespace optila {
 
-template <typename ExprType, typename Op, typename... Operands>
+template <typename ExprType, typename Operation, typename... Operands>
 class ExpressionImpl;
 
 // Partial specialization for matrix_tag
-template <typename Op, typename... Operands>
-class ExpressionImpl<details::matrix_tag, Op, Operands...>
+template <typename Operation, typename... Operands>
+class ExpressionImpl<details::matrix_tag, Operation, Operands...>
     : public details::matrix_tag {
-  using Expr = Expression<Op, Operands...>;
+  using Expr = Expression<Operation, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
 
-  using Derived = Expression<Op, Operands...>;
+  using Derived = Expression<Operation, Operands...>;
   constexpr Derived& derived() { return static_cast<Derived&>(*this); }
   constexpr const Derived& derived() const {
     return static_cast<const Derived&>(*this);
@@ -43,16 +44,20 @@ class ExpressionImpl<details::matrix_tag, Op, Operands...>
 };
 
 // Partial specialization for scalar_tag
-template <typename Op, typename... Operands>
-class ExpressionImpl<details::scalar_tag, Op, Operands...>
+template <typename Operation, typename... Operands>
+class ExpressionImpl<details::scalar_tag, Operation, Operands...>
     : public details::scalar_tag {};
 
-template <typename Op, typename... Operands>
+// Expression inherits from Operation to provide storage for the operation
+// in the rare case that it is stateful. Otherwise, empty base optimization
+// (EBO) will ensure that the operation does not take up any additional space.
+template <typename Operation, typename... Operands>
 class Expression
-    : public ExpressionImpl<typename ExpressionTraits<
-                                Expression<Op, Operands...>>::expression_type,
-                            Op, Operands...> {
-  using Expr = Expression<Op, Operands...>;
+    : public ExpressionImpl<typename ExpressionTraits<Expression<
+                                Operation, Operands...>>::expression_type,
+                            Operation, Operands...>,
+      public Operation {
+  using Expr = Expression<Operation, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
 
   using operand_storage_type =
@@ -62,8 +67,9 @@ class Expression
   using value_type = typename ExprTraits::value_type;
   using result_type = typename ExprTraits::result_type;
 
-  constexpr explicit Expression(Operands&&... operands)
-      : m_operands(std::forward<Operands>(operands)...) {
+  constexpr explicit Expression(Operation&& operation, Operands&&... operands)
+      : m_operands(std::forward<Operands>(operands)...),
+        Operation(std::forward<Operation>(operation)) {
     using ExprTraits = ExpressionTraits<Expr>;
     if constexpr (std::conjunction_v<
                       details::is_static_expression<Operands>...>) {
@@ -73,7 +79,7 @@ class Expression
     }
   }
 
-  using operation = Op;
+  using operation = Operation;
 
   // Return the tuple of operands by-value only if it is small and trivial.
   // Otherwise, return by const reference.
@@ -84,5 +90,10 @@ class Expression
  private:
   operand_storage_type m_operands;
 };
+
+// Deduction guide for Expression
+template <typename Operation, typename... Operands,
+          typename = std::enable_if_t<details::is_operation_v<Operation>>>
+Expression(Operation&&, Operands&&...) -> Expression<Operation, Operands...>;
 
 }  // namespace optila

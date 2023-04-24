@@ -5,6 +5,7 @@
 #include "details/optila_expression.h"
 #include "details/optila_scalar.h"
 #include "optila_evaluator_impl.h"
+#include "optila_optimizer_impl.h"
 
 namespace optila {
 
@@ -25,7 +26,8 @@ class Scalar : public details::scalar_tag {
     // Accept l-value and r-value expressions but do not std::forward<Expr> to
     // the evaluator. The evaluator does not accept r-value expressions and will
     // not manage the lifetime of the expression.
-    Evaluator<std::decay_t<Expr>>(expr).evaluate_into(*this);
+    Evaluator<std::decay_t<Expr>, optimize_expression_t<Expr>>(expr)
+        .evaluate_into(*this);
   }
 
   constexpr operator decltype(auto)() const { return value_; }

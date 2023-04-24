@@ -17,8 +17,8 @@ constexpr auto operator+(Lhs&& lhs, Rhs&& rhs) {
     return Expression<Operation::ScalarAddition, Lhs, Rhs>(
         std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
   } else {
-    return Expression<Operation::Addition, Lhs, Rhs>(std::forward<Lhs>(lhs),
-                                                     std::forward<Rhs>(rhs));
+    return Expression(Operation::Addition{}, std::forward<Lhs>(lhs),
+                      std::forward<Rhs>(rhs));
   }
 }
 
@@ -32,8 +32,8 @@ constexpr auto operator-(Lhs&& lhs, Rhs&& rhs) {
     return Expression<Operation::ScalarSubtraction, Lhs, Rhs>(
         std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
   } else {
-    return Expression<Operation::Subtraction, Lhs, Rhs>(std::forward<Lhs>(lhs),
-                                                        std::forward<Rhs>(rhs));
+    return Expression(Operation::Subtraction{}, std::forward<Lhs>(lhs),
+                      std::forward<Rhs>(rhs));
   }
 }
 
@@ -43,12 +43,12 @@ template <typename Lhs, typename Rhs,
 constexpr auto operator*(Lhs&& lhs, Rhs&& rhs) {
   if constexpr (details::is_matrix_v<Lhs> || details::is_matrix_v<Rhs>) {
     // Matrix multiplication operation
-    return Expression<Operation::Multiplication, Lhs, Rhs>(
-        std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
+    return Expression(Operation::Multiplication{}, std::forward<Lhs>(lhs),
+                      std::forward<Rhs>(rhs));
   } else if constexpr (details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>) {
     // Scalar multiplication operation
-    return Expression<Operation::ScalarMultiplication, Lhs, Rhs>(
-        std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
+    return Expression(Operation::ScalarMultiplication{}, std::forward<Lhs>(lhs),
+                      std::forward<Rhs>(rhs));
   }
 }
 
@@ -59,12 +59,12 @@ template <typename Lhs, typename Rhs,
 constexpr auto operator/(Lhs&& lhs, Rhs&& rhs) {
   if constexpr (details::is_matrix_v<Lhs> && details::is_scalar_v<Rhs>) {
     // Matrix-Scalar division operation
-    return Expression<Operation::MatrixScalarDivision, Lhs, Rhs>(
-        std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
+    return Expression(Operation::MatrixScalarDivision{}, std::forward<Lhs>(lhs),
+                      std::forward<Rhs>(rhs));
   } else {
     // Scalar division operation
-    return Expression<Operation::ScalarDivision, Lhs, Rhs>(
-        std::forward<Lhs>(lhs), std::forward<Rhs>(rhs));
+    return Expression(Operation::ScalarDivision{}, std::forward<Lhs>(lhs),
+                      std::forward<Rhs>(rhs));
   }
 }
 
@@ -73,8 +73,8 @@ template <typename Lhs, typename Rhs,
           typename = std::enable_if_t<details::is_expression_v<Lhs> &&
                                       details::is_expression_v<Rhs>>>
 constexpr bool operator==(Lhs&& lhs, Rhs&& rhs) {
-  return evaluate(Expression<Operation::StrictEquality, Lhs, Rhs>(
-      std::forward<Lhs>(lhs), std::forward<Rhs>(rhs)))();
+  return evaluate(Expression(Operation::StrictEquality{},
+                             std::forward<Lhs>(lhs), std::forward<Rhs>(rhs)))();
 }
 
 }  // namespace optila

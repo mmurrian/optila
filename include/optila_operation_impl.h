@@ -4,35 +4,36 @@
 #include <tuple>
 
 #include "details/optila_matrix.h"
+#include "details/optila_operation.h"
 #include "details/optila_type_traits.h"
 
 namespace optila::Operation {
 
-struct ScalarAddition {
+struct ScalarAddition : public details::operation_tag {
   static constexpr auto to_scalar = [](auto&& lhs, auto&& rhs) {
     return lhs() + rhs();
   };
 };
 
-struct Addition {
+struct Addition : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs, auto&& rhs) {
     return lhs(i, j) + rhs(i, j);
   };
 };
-struct ScalarSubtraction {
+struct ScalarSubtraction : public details::operation_tag {
   static constexpr auto to_scalar = [](auto&& lhs, auto&& rhs) {
     return lhs() - rhs();
   };
 };
-struct Subtraction {
+struct Subtraction : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs, auto&& rhs) {
     return lhs(i, j) - rhs(i, j);
   };
 };
 // Matrix multiplication
-struct Multiplication {
+struct Multiplication : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs, auto&& rhs) {
     if constexpr (details::is_matrix_v<decltype(lhs)> &&
@@ -52,23 +53,23 @@ struct Multiplication {
     }
   };
 };
-struct ScalarMultiplication {
+struct ScalarMultiplication : public details::operation_tag {
   static constexpr auto to_scalar = [](auto&& lhs, auto&& rhs) {
     return lhs() * rhs();
   };
 };
-struct MatrixScalarDivision {
+struct MatrixScalarDivision : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs, auto&& rhs) {
     return lhs(i, j) / rhs();
   };
 };
-struct ScalarDivision {
+struct ScalarDivision : public details::operation_tag {
   static constexpr auto to_scalar = [](auto&& lhs, auto&& rhs) {
     return lhs() / rhs();
   };
 };
-struct DotProduct {
+struct DotProduct : public details::operation_tag {
   static constexpr auto to_scalar = [](auto&& lhs, auto&& rhs) {
     using value_type = typename std::decay_t<decltype(lhs(0, 0))>;
     value_type result = 0;
@@ -78,38 +79,38 @@ struct DotProduct {
     return result;
   };
 };
-struct CrossProduct {};
-struct OuterProduct {};
-struct Transpose {
+struct CrossProduct : public details::operation_tag {};
+struct OuterProduct : public details::operation_tag {};
+struct Transpose : public details::operation_tag {
   static constexpr auto to_matrix_element =
       [](std::size_t i, std::size_t j, auto&& lhs) { return lhs(j, i); };
 };
 
-struct Determinant {};
-struct Trace {};
-struct Inverse {};
-struct Adjoint {};
-struct Cofactor {};
-struct Rank {};
+struct Determinant : public details::operation_tag {};
+struct Trace : public details::operation_tag {};
+struct Inverse : public details::operation_tag {};
+struct Adjoint : public details::operation_tag {};
+struct Cofactor : public details::operation_tag {};
+struct Rank : public details::operation_tag {};
 template <std::size_t StartRow, std::size_t StartCol, std::size_t NumRows,
           std::size_t NumCols>
-struct SubmatrixExtraction {
+struct SubmatrixExtraction : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs) {
     return lhs(i + StartRow, j + StartCol);
   };
 };
-struct Concatenation {};
-struct SquareRoot {
+struct Concatenation : public details::operation_tag {};
+struct SquareRoot : public details::operation_tag {
   // FIXME: sqrt is not constexpr
   static constexpr auto to_scalar = [](auto&& lhs) {
     using std::sqrt;
     return sqrt(lhs());
   };
 };
-struct ElementWiseOperation {};
+struct ElementWiseOperation : public details::operation_tag {};
 
-struct StrictEquality {
+struct StrictEquality : public details::operation_tag {
   static constexpr auto to_scalar = [](auto&& lhs, auto&& rhs) {
     using Lhs = std::decay_t<decltype(lhs)>;
     using Rhs = std::decay_t<decltype(rhs)>;
@@ -129,7 +130,7 @@ struct StrictEquality {
 };
 
 template <typename FromType, typename ToType>
-struct StaticConversion {
+struct StaticConversion : public details::operation_tag {
   static constexpr auto to_scalar = [](auto&& lhs) {
     return static_cast<ToType>(lhs());
   };
@@ -141,13 +142,13 @@ struct StaticConversion {
 
 // Fill a matrix with a constant value
 template <std::size_t NumRows, std::size_t NumCols>
-struct ConstantMatrix {
+struct ConstantMatrix : public details::operation_tag {
   static constexpr auto to_matrix_element =
       [](std::size_t /*i*/, std::size_t /*j*/, auto&& lhs) { return lhs(); };
 };
 // Fill a diagonal matrix with a constant value
 template <std::size_t NumRows, std::size_t NumCols>
-struct ConstantDiagonal {
+struct ConstantDiagonal : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs) {
     using value_type = decltype(lhs());
@@ -155,7 +156,7 @@ struct ConstantDiagonal {
   };
 };
 // Put a vector on the diagonal of a matrix
-struct DiagonalFromVector {
+struct DiagonalFromVector : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs) {
     using value_type = typename std::decay_t<decltype(lhs(0, 0))>::value_type;
@@ -163,12 +164,12 @@ struct DiagonalFromVector {
   };
 };
 // Extract the diagonal of a matrix into a vector
-struct DiagonalToVector {
+struct DiagonalToVector : public details::operation_tag {
   static constexpr auto to_matrix_element =
       [](std::size_t i, std::size_t j, auto&& lhs) { return lhs(i, i); };
 };
 // Extract the diagonal of a matrix into a diagonal matrix
-struct DiagonalMatrix {
+struct DiagonalMatrix : public details::operation_tag {
   static constexpr auto to_matrix_element = [](std::size_t i, std::size_t j,
                                                auto&& lhs) {
     using value_type = typename std::decay_t<decltype(lhs(0, 0))>::value_type;
