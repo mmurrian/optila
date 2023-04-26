@@ -188,15 +188,18 @@ class Evaluator<
 
   using expression_storage_type = details::efficient_type_qualifiers_t<Expr>;
 
+  Evaluator<
+      std::decay_t<Expr>,
+      details::once_and_then_strategy<details::lazy_strategy_tag, Strategy>,
+      EvaluatorPolicyChain>
+      m_evaluator;
+
   result_type m_result;
 
  public:
-  constexpr Evaluator(expression_storage_type expr)
-      : m_result(Evaluator<std::decay_t<Expr>,
-                           details::once_and_then_strategy<
-                               details::lazy_strategy_tag, Strategy>,
-                           EvaluatorPolicyChain>(expr)
-                     .evaluate()) {}
+  constexpr Evaluator(expression_storage_type expr) : m_evaluator(expr) {
+    m_evaluator.evaluate_into(m_result);
+  }
 
   constexpr static auto num_rows_compile_time =
       result_type::num_rows_compile_time;
@@ -289,15 +292,18 @@ class Evaluator<
   using result_type = typename ExprTraits::result_type;
   using expression_type = details::efficient_type_qualifiers_t<Expr>;
 
+  Evaluator<
+      std::decay_t<Expr>,
+      details::once_and_then_strategy<details::lazy_strategy_tag, Strategy>,
+      EvaluatorPolicyChain>
+      m_evaluator;
+
   result_type m_result;
 
  public:
-  constexpr Evaluator(expression_type expr)
-      : m_result(Evaluator<std::decay_t<Expr>,
-                           details::once_and_then_strategy<
-                               details::lazy_strategy_tag, Strategy>,
-                           EvaluatorPolicyChain>(expr)
-                     .evaluate()) {}
+  constexpr Evaluator(expression_type expr) : m_evaluator(expr) {
+    m_evaluator.evaluate_into(m_result);
+  }
 
   constexpr decltype(auto) operator()() const { return m_result(); }
 

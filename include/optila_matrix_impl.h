@@ -98,6 +98,11 @@ class Matrix : public details::matrix_tag {
 
   constexpr Matrix() = default;
 
+  Matrix(std::size_t num_rows, std::size_t num_cols) {
+    static_assert(NumRows == Dynamic || NumCols == Dynamic);
+    resize(num_rows, num_cols);
+  }
+
   Matrix(const std::vector<std::vector<ValueType>>& from) {
     details::assign_vector_2d_to_matrix(from, *this);
   }

@@ -7,7 +7,7 @@
 
 #include "optila.h"
 
-static constexpr int Nfixed = 4;
+static constexpr int Nfixed = 8;
 
 // Function to generate a random matrix of size NxN using Eigen
 Eigen::MatrixXd eigen_generate_random_matrix(int Nrows, int Ncols) {
@@ -31,8 +31,7 @@ optila_generate_random_matrix(int Nrows, int Ncols) {
   std::mt19937 gen(rd());
   std::uniform_real_distribution<> dis(-1.0, 1.0);
 
-  optila::Matrix<double, optila::Dynamic, optila::Dynamic> matrix;
-  matrix.resize(Nrows, Ncols);
+  optila::Matrix<double, optila::Dynamic, optila::Dynamic> matrix(Nrows, Ncols);
   for (int i = 0; i < Nrows; ++i) {
     for (int j = 0; j < Ncols; ++j) {
       matrix(i, j) = dis(gen);
@@ -77,10 +76,19 @@ static void BM_optila_MixedBasic(benchmark::State& state) {
   }
   benchmark::DoNotOptimize(result);
   state.SetComplexityN(N);
-}
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_optila_MixedBasic);
+  auto expr =
+      (A * B - C) * optila::transpose(D + E) + F * optila::transpose(G * H);
+
+  using Lhs = decltype(expr);
+  sizeof(
+      optila::Evaluator<std::decay_t<Lhs>, optila::details::policy_strategy_tag,
+                        optila::optimize_expression_t<Lhs>>(expr));
+
+  optila::print_expression_optimization<
+      optila::optimize_expression_t<decltype(expr)>>(expr, std::cout);
+  std::cout << std::endl;
+}
 
 // Benchmark function for matrix multiplication
 static void BM_eigen_MixedBasic(benchmark::State& state) {
@@ -104,9 +112,6 @@ static void BM_eigen_MixedBasic(benchmark::State& state) {
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_eigen_MixedBasic);
-
 // Benchmark function for matrix multiplication
 static void BM_armadillo_MixedBasic(benchmark::State& state) {
   constexpr int N = Nfixed;  // Matrix size
@@ -128,9 +133,6 @@ static void BM_armadillo_MixedBasic(benchmark::State& state) {
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_armadillo_MixedBasic);
-
 // Benchmark function for matrix multiplication
 static void BM_optila_FixedMatrixMultiplication(benchmark::State& state) {
   constexpr int N = Nfixed;  // Matrix size
@@ -145,9 +147,6 @@ static void BM_optila_FixedMatrixMultiplication(benchmark::State& state) {
   benchmark::DoNotOptimize(result);
   state.SetComplexityN(N);
 }
-
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_optila_FixedMatrixMultiplication);
 
 // Benchmark function for matrix multiplication
 static void BM_eigen_FixedMatrixMultiplication(benchmark::State& state) {
@@ -164,9 +163,6 @@ static void BM_eigen_FixedMatrixMultiplication(benchmark::State& state) {
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_eigen_FixedMatrixMultiplication);
-
 // Benchmark function for matrix multiplication
 static void BM_armadillo_FixedMatrixMultiplication(benchmark::State& state) {
   constexpr int N = Nfixed;  // Matrix size
@@ -181,9 +177,6 @@ static void BM_armadillo_FixedMatrixMultiplication(benchmark::State& state) {
   benchmark::DoNotOptimize(result);
   state.SetComplexityN(N);
 }
-
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_armadillo_FixedMatrixMultiplication);
 
 // Benchmark function for matrix multiplication
 static void BM_optila_NestedFixedMatrixMultiplication(benchmark::State& state) {
@@ -200,9 +193,6 @@ static void BM_optila_NestedFixedMatrixMultiplication(benchmark::State& state) {
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_optila_NestedFixedMatrixMultiplication);
-
 // Benchmark function for matrix multiplication
 static void BM_eigen_NestedFixedMatrixMultiplication(benchmark::State& state) {
   constexpr int N = Nfixed;  // Matrix size
@@ -217,9 +207,6 @@ static void BM_eigen_NestedFixedMatrixMultiplication(benchmark::State& state) {
   benchmark::DoNotOptimize(result);
   state.SetComplexityN(N);
 }
-
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_eigen_NestedFixedMatrixMultiplication);
 
 // Benchmark function for matrix multiplication
 static void BM_armadillo_NestedFixedMatrixMultiplication(
@@ -237,9 +224,6 @@ static void BM_armadillo_NestedFixedMatrixMultiplication(
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_armadillo_NestedFixedMatrixMultiplication);
-
 // Benchmark function for matrix multiplication
 static void BM_optila_SubMatrixNestedFixedMatrixMultiplication(
     benchmark::State& state) {
@@ -255,9 +239,6 @@ static void BM_optila_SubMatrixNestedFixedMatrixMultiplication(
   benchmark::DoNotOptimize(result);
   state.SetComplexityN(N);
 }
-
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_optila_SubMatrixNestedFixedMatrixMultiplication);
 
 // Benchmark function for matrix multiplication
 static void BM_eigen_SubMatrixNestedFixedMatrixMultiplication(
@@ -275,9 +256,6 @@ static void BM_eigen_SubMatrixNestedFixedMatrixMultiplication(
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_eigen_SubMatrixNestedFixedMatrixMultiplication);
-
 // Benchmark function for matrix multiplication
 static void BM_armadillo_SubMatrixNestedFixedMatrixMultiplication(
     benchmark::State& state) {
@@ -294,9 +272,6 @@ static void BM_armadillo_SubMatrixNestedFixedMatrixMultiplication(
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_armadillo_SubMatrixNestedFixedMatrixMultiplication);
-
 // Benchmark function for matrix multiplication
 static void BM_optila_MatrixMultiplicationTranspose(benchmark::State& state) {
   constexpr int N = Nfixed;  // Matrix size
@@ -311,9 +286,6 @@ static void BM_optila_MatrixMultiplicationTranspose(benchmark::State& state) {
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_optila_MatrixMultiplicationTranspose);
-
 // Benchmark function for matrix multiplication
 static void BM_eigen_MatrixMultiplicationTranspose(benchmark::State& state) {
   constexpr int N = Nfixed;  // Matrix size
@@ -327,9 +299,6 @@ static void BM_eigen_MatrixMultiplicationTranspose(benchmark::State& state) {
   benchmark::DoNotOptimize(result);
   state.SetComplexityN(N);
 }
-
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_eigen_MatrixMultiplicationTranspose);
 
 // Benchmark function for matrix multiplication
 static void BM_armadillo_MatrixMultiplicationTranspose(
@@ -346,9 +315,6 @@ static void BM_armadillo_MatrixMultiplicationTranspose(
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_armadillo_MatrixMultiplicationTranspose);
-
 // Benchmark function for matrix multiplication
 static void BM_optila_MatrixMultiplication(benchmark::State& state) {
   int N = state.range(0);  // Matrix size
@@ -363,12 +329,6 @@ static void BM_optila_MatrixMultiplication(benchmark::State& state) {
   benchmark::DoNotOptimize(result);
   state.SetComplexityN(N);
 }
-
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_optila_MatrixMultiplication)
-    ->RangeMultiplier(2)
-    ->Range(8, 1024)
-    ->Complexity();
 
 // Benchmark function for matrix multiplication
 static void BM_eigen_MatrixMultiplication(benchmark::State& state) {
@@ -385,12 +345,6 @@ static void BM_eigen_MatrixMultiplication(benchmark::State& state) {
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
-BENCHMARK(BM_eigen_MatrixMultiplication)
-    ->RangeMultiplier(2)
-    ->Range(8, 1024)
-    ->Complexity();
-
 // Benchmark function for matrix multiplication
 static void BM_armadillo_MatrixMultiplication(benchmark::State& state) {
   int N = state.range(0);  // Matrix size
@@ -406,10 +360,36 @@ static void BM_armadillo_MatrixMultiplication(benchmark::State& state) {
   state.SetComplexityN(N);
 }
 
-// Register the benchmark function with different matrix sizes
+BENCHMARK(BM_optila_MixedBasic);
+BENCHMARK(BM_optila_FixedMatrixMultiplication);
+BENCHMARK(BM_optila_NestedFixedMatrixMultiplication);
+BENCHMARK(BM_optila_SubMatrixNestedFixedMatrixMultiplication);
+BENCHMARK(BM_optila_MatrixMultiplicationTranspose);
+BENCHMARK(BM_optila_MatrixMultiplication)
+    ->RangeMultiplier(2)
+    ->Range(8, 1024)
+    ->Complexity();
+
+#if 1
+BENCHMARK(BM_eigen_MixedBasic);
+BENCHMARK(BM_eigen_FixedMatrixMultiplication);
+BENCHMARK(BM_eigen_NestedFixedMatrixMultiplication);
+BENCHMARK(BM_eigen_SubMatrixNestedFixedMatrixMultiplication);
+BENCHMARK(BM_eigen_MatrixMultiplicationTranspose);
+BENCHMARK(BM_eigen_MatrixMultiplication)
+    ->RangeMultiplier(2)
+    ->Range(8, 1024)
+    ->Complexity();
+
+BENCHMARK(BM_armadillo_MixedBasic);
+BENCHMARK(BM_armadillo_FixedMatrixMultiplication);
+BENCHMARK(BM_armadillo_NestedFixedMatrixMultiplication);
+BENCHMARK(BM_armadillo_SubMatrixNestedFixedMatrixMultiplication);
+BENCHMARK(BM_armadillo_MatrixMultiplicationTranspose);
 BENCHMARK(BM_armadillo_MatrixMultiplication)
     ->RangeMultiplier(2)
     ->Range(8, 1024)
     ->Complexity();
+#endif
 
 BENCHMARK_MAIN();

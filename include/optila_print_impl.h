@@ -214,4 +214,76 @@ std::ostream& operator<<(std::ostream& os,
   return os;
 }
 
+template <typename PolicyChain, typename Op, typename... Operands>
+void print_expression_optimization(const Expression<Op, Operands...>& expr,
+                                   std::ostream& os, std::index_sequence<0>,
+                                   int tab_level = 0) {
+  if constexpr (PolicyChain::lazy_evaluation) {
+    os << "\n";
+    os << std::string(tab_level, ' ');
+    os << "lazy(";
+  } else {
+    os << "\n";
+    os << std::string(tab_level, ' ');
+    os << "eager(";
+  }
+
+  os << std::string(tab_level + 1, ' ');
+  using Expr = Expression<Op, Operands...>;
+  print_expression_optimization<
+      typename PolicyChain::template operand_policy_type<Expr, 0>>(
+      std::get<0>(expr.operands()), os, tab_level + 1);
+
+  os << ")";
+
+  os << Operation::operation_to_symbol<Op>();
+}
+
+template <typename PolicyChain, typename Op, typename... Operands,
+          std::size_t... Is>
+void print_expression_optimization(const Expression<Op, Operands...>& expr,
+                                   std::ostream& os, std::index_sequence<Is...>,
+                                   int tab_level = 0) {
+  using Expr = Expression<Op, Operands...>;
+
+  if constexpr (PolicyChain::lazy_evaluation) {
+    os << "\n";
+    os << std::string(tab_level, ' ');
+    os << "lazy(";
+  } else {
+    os << "\n";
+    os << std::string(tab_level, ' ');
+    os << "eager(";
+  }
+
+  ((os << (Is == 0 ? "" : Operation::operation_to_symbol<Op>()),
+    print_expression_optimization<
+        typename PolicyChain::template operand_policy_type<Expr, Is>>(
+        std::get<Is>(expr.operands()), os, tab_level + 1)),
+   ...);
+
+  os << ")";
+}
+
+template <typename PolicyChain, typename Op, typename... Operands>
+void print_expression_optimization(const Expression<Op, Operands...>& expr,
+                                   std::ostream& os, int tab_level = 0) {
+  print_expression_optimization<PolicyChain>(
+      expr, os, std::make_index_sequence<sizeof...(Operands)>(), tab_level + 1);
+}
+
+template <typename PolicyChain, typename ValueType>
+void print_expression_optimization(const Scalar<ValueType>& expr,
+                                   std::ostream& os, int tab_level = 0) {
+  os << "Scalar";
+}
+
+template <typename PolicyChain, typename ValueType, std::size_t NumRows,
+          std::size_t NumCols>
+void print_expression_optimization(
+    const Matrix<ValueType, NumRows, NumCols>& expr, std::ostream& os,
+    int tab_level = 0) {
+  os << "Matrix<" << expr.num_rows() << ", " << expr.num_cols() << ">";
+}
+
 }  // namespace optila
