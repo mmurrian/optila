@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <type_traits>
@@ -18,6 +19,155 @@ struct DefaultMatrixPolicy {
   constexpr static auto NumColsHint = 1000;
   constexpr static StorageOrder Order = StorageOrder::RowMajor;
 };
+
+template <std::size_t Row0, std::size_t Col0, std::size_t NumRows,
+          std::size_t NumCols>
+struct MatrixBounds {
+  using Transpose_t = MatrixBounds<Col0, Row0, NumCols, NumRows>;
+
+  constexpr MatrixBounds() = default;
+
+  constexpr MatrixBounds(std::size_t row0, std::size_t col0,
+                         std::size_t numRows, std::size_t numCols)
+      : m_row0(row0), m_col0(col0), m_num_rows(numRows), m_num_cols(numCols) {}
+
+  constexpr static std::size_t row0_compile_time = Row0;
+  constexpr static std::size_t col0_compile_time = Col0;
+  constexpr static std::size_t num_rows_compile_time = NumRows;
+  constexpr static std::size_t num_cols_compile_time = NumCols;
+  constexpr static std::size_t row_end_compile_time =
+      Row0 != Dynamic && NumRows != Dynamic ? Row0 + NumRows : Dynamic;
+  constexpr static std::size_t col_end_compile_time =
+      Col0 != Dynamic && NumCols != Dynamic ? Col0 + NumCols : Dynamic;
+
+  [[nodiscard]] constexpr static bool is_static() {
+    return Row0 != Dynamic && Col0 != Dynamic && NumRows != Dynamic &&
+           NumCols != Dynamic;
+  }
+  [[nodiscard]] constexpr static bool is_vector() {
+    return NumRows == 1 || NumCols == 1;
+  }
+  [[nodiscard]] constexpr std::size_t vector_size() {
+    static_assert(is_vector(), "Not a vector");
+    return std::max(NumRows, NumCols);
+  }
+
+  [[nodiscard]] constexpr std::size_t row0() const {
+    return row0_compile_time != Dynamic ? row0_compile_time : m_row0;
+  }
+  [[nodiscard]] constexpr std::size_t col0() const {
+    return col0_compile_time != Dynamic ? col0_compile_time : m_col0;
+  }
+  [[nodiscard]] constexpr std::size_t row_end() const {
+    return row_end_compile_time != Dynamic ? row_end_compile_time
+                                           : m_row0 + m_num_rows;
+  }
+  [[nodiscard]] constexpr std::size_t col_end() const {
+    return col_end_compile_time != Dynamic ? col_end_compile_time
+                                           : m_col0 + m_num_cols;
+  }
+  [[nodiscard]] constexpr std::size_t num_rows() const {
+    return num_rows_compile_time != Dynamic ? num_rows_compile_time
+                                            : m_num_rows;
+  }
+  [[nodiscard]] constexpr std::size_t num_cols() const {
+    return num_cols_compile_time != Dynamic ? num_cols_compile_time
+                                            : m_num_cols;
+  }
+
+ private:
+  std::size_t m_row0 = Row0;
+  std::size_t m_col0 = Col0;
+  std::size_t m_num_rows = NumRows;
+  std::size_t m_num_cols = NumCols;
+};
+
+namespace details {
+
+template <std::size_t T1, std::size_t T2>
+inline constexpr std::size_t max_start_compile_time =
+    T1 != Dynamic && T2 != Dynamic ? std::max(T1, T2) : Dynamic;
+
+template <std::size_t T1, std::size_t T2>
+inline constexpr std::size_t min_end_compile_time =
+    T1 != Dynamic && T2 != Dynamic ? std::min(T1, T2) : Dynamic;
+
+template <std::size_t T1, std::size_t T2>
+constexpr std::size_t max_start(std::size_t t1, std::size_t t2) {
+  if constexpr (T1 != Dynamic && T2 != Dynamic) {
+    return max_start_compile_time<T1, T2>;
+  } else {
+    return std::max(t1, t2);
+  }
+}
+
+template <std::size_t T1, std::size_t T2>
+constexpr std::size_t min_end(std::size_t t1, std::size_t t2) {
+  if constexpr (T1 != Dynamic && T2 != Dynamic) {
+    return min_end_compile_time<T1, T2>;
+  } else {
+    return std::min(t1, t2);
+  }
+}
+
+}  // namespace details
+
+/*  This operation computes the overlapping region between two submatrices (or
+ * bounds) where both operands and the result are referenced to the original
+ * matrix. */
+template <typename Bounds1, typename Bounds2>
+constexpr decltype(auto) intersect(const Bounds1& b1, const Bounds2& b2) {
+  constexpr std::size_t row0_compile_time =
+      details::max_start_compile_time<Bounds1::row0_compile_time,
+                                      Bounds2::row0_compile_time>;
+  constexpr std::size_t col0_compile_time =
+      details::max_start_compile_time<Bounds1::col0_compile_time,
+                                      Bounds2::col0_compile_time>;
+  constexpr std::size_t row_end_compile_time =
+      details::min_end_compile_time<Bounds1::row_end_compile_time,
+                                    Bounds2::row_end_compile_time>;
+  constexpr std::size_t col_end_compile_time =
+      details::min_end_compile_time<Bounds1::col_end_compile_time,
+                                    Bounds2::col_end_compile_time>;
+
+  const std::size_t row0 =
+      details::max_start<Bounds1::row0_compile_time,
+                         Bounds2::row0_compile_time>(b1.row0(), b2.row0());
+  const std::size_t col0 =
+      details::max_start<Bounds1::col0_compile_time,
+                         Bounds2::col0_compile_time>(b1.col0(), b2.col0());
+  const std::size_t numRows = details::min_end<Bounds1::row_end_compile_time,
+                                               Bounds2::row_end_compile_time>(
+                                  b1.row_end(), b2.row_end()) -
+                              row0;
+  const std::size_t numCols = details::min_end<Bounds1::col_end_compile_time,
+                                               Bounds2::col_end_compile_time>(
+                                  b1.col_end(), b2.col_end()) -
+                              col0;
+
+  return MatrixBounds<row0_compile_time, col0_compile_time,
+                      row_end_compile_time - row0_compile_time,
+                      col_end_compile_time - col0_compile_time>(
+      row0, col0, numRows, numCols);
+}
+
+/* This operation computes the overlapping region between an outer submatrix (or
+ * bounds) and an inner submatrix (or bounds) where the inner submatrix is
+ * specified relative to the outer submatrix, and the result is referenced to
+ * the original matrix. */
+template <typename Bounds1, typename Bounds2>
+constexpr decltype(auto) submatrix_intersect(const Bounds1& outer_bounds,
+                                             const Bounds2& inner_bounds) {
+  const MatrixBounds<Bounds2::row0_compile_time + Bounds1::row0_compile_time,
+                     Bounds2::col0_compile_time + Bounds1::col0_compile_time,
+                     Bounds2::num_rows_compile_time,
+                     Bounds2::num_cols_compile_time>
+      inner_bounds_relative_to_base(inner_bounds.row0() + outer_bounds.row0(),
+                                    inner_bounds.col0() + outer_bounds.col0(),
+                                    inner_bounds.num_rows(),
+                                    inner_bounds.num_cols());
+  return intersect(outer_bounds, inner_bounds_relative_to_base);
+}
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           typename Policy>

@@ -55,6 +55,10 @@ struct ExpressionTraits<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>> {
   constexpr static auto operand_coefficient_ratio = std::make_tuple();
   constexpr static OperationCounts operation_counts = {};
 
+  using operand_expression_type = std::tuple<>;
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix = std::tuple<>;
+
   constexpr static auto num_rows() {
     static_assert(num_rows_compile_time != Dynamic);
     return num_rows_compile_time;
@@ -82,6 +86,7 @@ struct ExpressionTraits<Scalar<ValueType>> {
 
   constexpr static auto operand_coefficient_ratio = std::make_tuple();
   constexpr static OperationCounts operation_counts = {};
+  using operand_expression_type = std::tuple<>;
 
   constexpr static void static_validate() {}
 
@@ -106,8 +111,13 @@ struct ExpressionTraits<Expression<Operation::Transpose, LhsType>> {
                              num_cols_compile_time, DefaultMatrixPolicy>;
 
   // Each operand coefficient is accessed once in evaluation
-  constexpr static auto operand_coefficient_ratio = std::make_tuple(1, 1);
+  constexpr static auto operand_coefficient_ratio = std::make_tuple(1);
   constexpr static OperationCounts operation_counts = {};
+
+  using operand_expression_type = std::tuple<details::matrix_tag>;
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix =
+      std::tuple<typename ResultSubMatrix::Transpose_t>;
 
   constexpr static auto num_rows(const Lhs& lhs) { return lhs.num_cols(); }
 
@@ -137,6 +147,8 @@ struct ExpressionTraits<
   constexpr static auto operand_coefficient_ratio = std::make_tuple(1, 1);
   // Each coefficient calculation requires one addition
   constexpr static OperationCounts operation_counts = {1};
+  using operand_expression_type =
+      std::tuple<details::scalar_tag, details::scalar_tag>;
 
   constexpr static void static_validate() {
     static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
@@ -171,6 +183,12 @@ struct ExpressionTraits<Expression<Operation::Addition, LhsType, RhsType>>
   constexpr static auto operand_coefficient_ratio = std::make_tuple(1, 1);
   // Each coefficient calculation requires one addition
   constexpr static OperationCounts operation_counts = {1};
+
+  using operand_expression_type =
+      std::tuple<details::matrix_tag, details::matrix_tag>;
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix =
+      std::tuple<ResultSubMatrix, ResultSubMatrix>;
 
   constexpr static auto num_rows(const Lhs& lhs, const Rhs& /*rhs*/) {
     return lhs.num_rows();
@@ -212,6 +230,9 @@ struct ExpressionTraits<
   // Each coefficient calculation requires one subtraction
   constexpr static OperationCounts operation_counts = {1};
 
+  using operand_expression_type =
+      std::tuple<details::scalar_tag, details::scalar_tag>;
+
   static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
                 "Mismatched operands for scalar subtraction");
 };
@@ -248,6 +269,12 @@ struct ExpressionTraits<Expression<Operation::Subtraction, LhsType, RhsType>>
   constexpr static auto operand_coefficient_ratio = std::make_tuple(1, 1);
   // Each coefficient calculation requires one subtraction
   constexpr static OperationCounts operation_counts = {1};
+
+  using operand_expression_type =
+      std::tuple<details::matrix_tag, details::matrix_tag>;
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix =
+      std::tuple<ResultSubMatrix, ResultSubMatrix>;
 
   static_assert(details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs>,
                 "Mismatched operands for subtraction");
@@ -297,6 +324,13 @@ struct ScalarMatrixMultiplicationExpressionTraits {
   // Each coefficient calculation requires one multiplication
   constexpr static OperationCounts operation_counts = {0, 1};
 
+  using operand_expression_type =
+      std::tuple<details::scalar_tag, details::matrix_tag>;
+
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix =
+      std::tuple<details::scalar_tag, ResultSubMatrix>;
+
   static_assert(details::is_scalar_v<Lhs> && details::is_matrix_v<Rhs>,
                 "Mismatched operands for scalar-matrix multiplication");
 
@@ -338,6 +372,13 @@ struct MatrixScalarMultiplicationExpressionTraits {
   constexpr static auto operand_coefficient_ratio = std::make_tuple(1, 1);
   // Each coefficient calculation requires one multiplication
   constexpr static OperationCounts operation_counts = {0, 1};
+
+  using operand_expression_type =
+      std::tuple<details::matrix_tag, details::scalar_tag>;
+
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix =
+      std::tuple<ResultSubMatrix, details::scalar_tag>;
 
   static_assert(details::is_matrix_v<Lhs> && details::is_scalar_v<Rhs>,
                 "Mismatched operands for matrix-scalar multiplication");
@@ -391,6 +432,18 @@ struct MatrixMultiplicationExpressionTraits {
   constexpr static auto K = Lhs::num_cols_hint;
   constexpr static OperationCounts operation_counts = {K - 1, K};
 
+  using operand_expression_type =
+      std::tuple<details::matrix_tag, details::matrix_tag>;
+
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix =
+      std::tuple<MatrixBounds<ResultSubMatrix::row0_compile_time, 0,
+                              ResultSubMatrix::num_rows_compile_time,
+                              Lhs::num_cols_compile_time>,
+                 MatrixBounds<0, ResultSubMatrix::col0_compile_time,
+                              Rhs::num_rows_compile_time,
+                              ResultSubMatrix::num_cols_compile_time>>;
+
   constexpr static void static_validate() {
     static_assert(details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs>,
                   "Matrix multiplication requires two matrix operands");
@@ -425,6 +478,9 @@ struct ExpressionTraits<
   using value_type = details::common_value_type_t<typename Lhs::value_type,
                                                   typename Rhs::value_type>;
   using result_type = Scalar<value_type>;
+
+  using operand_expression_type =
+      std::tuple<details::scalar_tag, details::scalar_tag>;
 
   constexpr static void static_validate() {
     static_assert(details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>,
@@ -466,6 +522,13 @@ struct ExpressionTraits<
   constexpr static auto operand_coefficient_ratio = std::make_tuple(1, 1);
   // Each coefficient calculation requires one division
   constexpr static OperationCounts operation_counts = {0, 0, 1};
+
+  using operand_expression_type =
+      std::tuple<details::matrix_tag, details::scalar_tag>;
+
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix =
+      std::tuple<ResultSubMatrix, details::scalar_tag>;
 
   constexpr static void static_validate() {
     static_assert(details::is_matrix_v<Lhs> && details::is_scalar_v<Rhs>,
@@ -509,6 +572,14 @@ struct ExpressionTraits<Expression<Operation::DotProduct, LhsType, RhsType>> {
   constexpr static auto K = std::max(num_rows_hint, num_cols_hint);
   constexpr static OperationCounts operation_counts = {K - 1, K};
 
+  using operand_expression_type =
+      std::tuple<details::matrix_tag, details::matrix_tag>;
+
+  template <typename>
+  using operand_active_sub_matrix = std::tuple<
+      MatrixBounds<0, 0, num_rows_compile_time, num_cols_compile_time>,
+      MatrixBounds<0, 0, num_rows_compile_time, num_cols_compile_time>>;
+
   constexpr static void static_validate() {
     static_assert(
         details::is_static_vector_v<Lhs> && details::is_static_vector_v<Rhs>,
@@ -535,6 +606,11 @@ struct ExpressionTraits<Expression<Operation::SquareRoot, LhsType>> {
   using expression_type = details::scalar_tag;
   using value_type = details::common_value_type_t<typename Lhs::value_type>;
   using result_type = Scalar<value_type>;
+
+  using operand_expression_type = std::tuple<details::scalar_tag>;
+
+  template <typename>
+  using operand_active_sub_matrix = std::tuple<details::scalar_tag>;
 
   static_assert(details::is_scalar_v<Lhs>,
                 "Square root requires a scalar operand");
@@ -580,6 +656,14 @@ struct ExpressionTraits<Expression<
   // evaluating the submatrix is the cost of evaluating the operand.
   constexpr static OperationCounts operation_counts = {};
 
+  using operand_expression_type = std::tuple<details::matrix_tag>;
+
+  using OuterBounds = MatrixBounds<StartRow, StartCol, NumRows, NumCols>;
+  template <typename InnerBounds>
+  using operand_active_sub_matrix =
+      std::tuple<decltype(submatrix_intersect<OuterBounds, InnerBounds>(
+          std::declval<OuterBounds>(), std::declval<InnerBounds>()))>;
+
   static_assert(details::is_matrix_v<Lhs>,
                 "Submatrix extraction requires a "
                 "matrix operand");
@@ -614,8 +698,17 @@ struct ExpressionTraits<
   constexpr static auto operand_coefficient_ratio = std::make_tuple(1, 1);
   constexpr static OperationCounts operation_counts = {};
 
-  static_assert((details::is_scalar_v<Lhs> && details::is_scalar_v<Rhs>) ||
-                    (details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs>),
+  using operand_expression_type =
+      std::tuple<details::matrix_tag, details::matrix_tag>;
+
+  template <typename>
+  using operand_active_sub_matrix =
+      std::tuple<MatrixBounds<0, 0, Lhs::num_rows_compile_time,
+                              Lhs::num_cols_compile_time>,
+                 MatrixBounds<0, 0, Rhs::num_rows_compile_time,
+                              Rhs::num_cols_compile_time>>;
+
+  static_assert((details::is_matrix_v<Lhs> && details::is_matrix_v<Rhs>),
                 "Mismatched operands for strict equality");
 
   constexpr static void static_validate() {
@@ -638,6 +731,8 @@ struct ScalarStaticConversionExpressionTraits {
   using value_type = ToType;
   using result_type = Scalar<value_type>;
 
+  using operand_expression_type = std::tuple<details::scalar_tag>;
+
   static_assert(details::is_scalar_v<Lhs>,
                 "Static conversion requires a scalar operand");
 };
@@ -658,6 +753,11 @@ struct MatrixStaticConversionExpressionTraits {
 
   using result_type = Matrix<value_type, num_rows_compile_time,
                              num_cols_compile_time, DefaultMatrixPolicy>;
+
+  using operand_expression_type = std::tuple<details::matrix_tag>;
+
+  template <typename ResultSubMatrix>
+  using operand_active_sub_matrix = std::tuple<ResultSubMatrix>;
 
   constexpr static auto num_rows(const Lhs& lhs) { return lhs.num_rows(); }
   constexpr static auto num_cols(const Lhs& lhs) { return lhs.num_cols(); }

@@ -15,7 +15,8 @@ template <typename T>
 struct is_expression_literal : std::false_type {};
 
 template <typename Op, typename... Operands>
-struct is_expression_literal<Expression<Op, Operands...>> : std::true_type {};
+struct is_expression_literal<Expression<Op, Operands...>>
+    : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_expression_literal_v = is_expression_literal<T>::value;

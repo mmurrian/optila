@@ -74,7 +74,7 @@ template <typename Lhs, typename Rhs,
                                       details::is_expression_v<Rhs>>>
 constexpr bool operator==(Lhs&& lhs, Rhs&& rhs) {
   return evaluate(Expression(Operation::StrictEquality{},
-                             std::forward<Lhs>(lhs), std::forward<Rhs>(rhs)))();
+                             std::forward<Lhs>(lhs), std::forward<Rhs>(rhs)));
 }
 
 }  // namespace optila

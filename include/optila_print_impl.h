@@ -11,7 +11,7 @@
 namespace optila {
 
 namespace Operation {
-template <typename Operation>
+template <typename Op>
 const char* operation_to_symbol();
 
 template <>

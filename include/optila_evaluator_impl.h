@@ -80,7 +80,12 @@ class LazyEvaluatorBase<Expression<Op, Operands...>, Strategy,
   LazyEvaluatorBase(Expression<Op, Operands...>&&) = delete;
 
  protected:
-  constexpr decltype(auto) expr() const { return m_expr; }
+  using operation_return_type = details::efficient_type_qualifiers_t<Op>;
+  constexpr operation_return_type operation() const {
+    static_assert(std::is_base_of_v<Op, Expr>);
+    return static_cast<operation_return_type>(m_expr);
+  }
+  constexpr expression_storage_type expr() const { return m_expr; }
 
   using operands_return_type =
       details::efficient_type_qualifiers_t<operands_storage_type>;
@@ -129,8 +134,8 @@ class Evaluator<
 
   constexpr decltype(auto) operator()(std::size_t i, std::size_t j) const {
     return std::apply(
-        [i, j](auto&&... operands) {
-          return Op::to_matrix_element(
+        [i, j, this](auto&&... operands) {
+          return Base::operation().to_matrix_element(
               i, j, std::forward<decltype(operands)>(operands)...);
         },
         Base::operands());
@@ -153,8 +158,15 @@ class Evaluator<
     if constexpr (details::is_dynamic_expression_v<decltype(dest)>) {
       dest.resize(num_rows(), num_cols());
     }
-    for (std::size_t i = 0; i < Base::expr().num_rows(); ++i) {
-      for (std::size_t j = 0; j < Base::expr().num_cols(); ++j) {
+
+    using active_bounds = typename EvaluatorPolicyChain::active_sub_matrix;
+    using expr_bounds = MatrixBounds<0, 0, ExprTraits::num_rows_compile_time,
+                                     ExprTraits::num_cols_compile_time>;
+
+    const auto sub_matrix =
+        intersect(active_bounds{}, expr_bounds(0, 0, num_rows(), num_cols()));
+    for (std::size_t i = sub_matrix.row0(); i < sub_matrix.row_end(); ++i) {
+      for (std::size_t j = sub_matrix.col0(); j < sub_matrix.col_end(); ++j) {
         dest(i, j) = (*this)(i, j);
       }
     }
@@ -241,7 +253,7 @@ class Evaluator<
   using Base::Base;
 
   constexpr decltype(auto) operator()() const {
-    return std::apply(Op::to_scalar, Base::operands());
+    return std::apply(Base::operation().to_scalar, Base::operands());
   }
 
   constexpr result_type evaluate() const {
@@ -289,13 +301,13 @@ class Evaluator<
 
   constexpr decltype(auto) operator()() const { return m_result(); }
 
-  constexpr value_type evaluate() const { return m_result(); }
+  constexpr result_type evaluate() const { return m_result; }
 
   template <typename OtherValueType>
-  constexpr void evaluate_into(OtherValueType& dest) const {
+  constexpr void evaluate_into(Scalar<OtherValueType>& dest) const {
     using CommonValueType =
         details::common_value_type_t<value_type, OtherValueType>;
-    dest = static_cast<CommonValueType>(m_result());
+    dest = Scalar<OtherValueType>(static_cast<CommonValueType>(m_result()));
   }
 };
 
@@ -361,13 +373,13 @@ class Evaluator<Scalar<ValueType>, Strategy, EvaluatorPolicyChain>
 
   constexpr decltype(auto) operator()() const { return m_value(); }
 
-  constexpr ValueType evaluate() const { return m_value(); }
+  constexpr result_type evaluate() const { return m_value; }
 
   template <typename OtherValueType>
-  constexpr void evaluate_into(OtherValueType& dest) const {
+  constexpr void evaluate_into(Scalar<OtherValueType>& dest) const {
     using CommonValueType =
         details::common_value_type_t<ValueType, OtherValueType>;
-    dest = static_cast<CommonValueType>(m_value());
+    dest = Scalar<OtherValueType>(static_cast<CommonValueType>(m_value()));
   }
 
  private:

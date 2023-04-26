@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 
 project(OPTiLA LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Header-only library target
 add_library(OPTiLA INTERFACE)
 target_include_directories(
@@ -67,3 +71,15 @@ install(
         include/optila_wrapper_operator_overloads.h
         include/optila_wrapper_aliases.h
   DESTINATION include)
+
+# Add benchmarking
+set(BENCHMARK_DOWNLOAD_DEPENDENCIES ON)
+set(BENCHMARK_ENABLE_TESTING OFF)
+set(BENCHMARK_ENABLE_INSTALL OFF)
+add_subdirectory(thirdparty/benchmark)
+
+find_package(Eigen3 REQUIRED)
+find_package(Armadillo REQUIRED)
+
+add_executable(OPTiLABenchmark benchmark.cpp)
+target_link_libraries(OPTiLABenchmark PRIVATE OPTiLA benchmark::benchmark Eigen3::Eigen ${ARMADILLO_LIBRARIES})

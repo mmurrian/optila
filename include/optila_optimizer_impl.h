@@ -22,9 +22,11 @@ struct CostHelper<> {
   constexpr static std::size_t cost = 0;
 };
 
-template <std::size_t Cost, bool LazyEvaluation, typename... Operands>
+template <std::size_t Cost, bool LazyEvaluation, typename ActiveSubMatrix,
+          typename... Operands>
 struct OptimizedEvaluatorPolicy {
   constexpr static bool lazy_evaluation = LazyEvaluation;
+  using active_sub_matrix = ActiveSubMatrix;
   constexpr static std::size_t cost = Cost + CostHelper<Operands...>::cost;
 
   constexpr static std::size_t num_operands = sizeof...(Operands);
@@ -33,46 +35,15 @@ struct OptimizedEvaluatorPolicy {
       std::tuple_element_t<OperandIndex, typename std::tuple<Operands...>>;
 };
 
-template <std::size_t CoefficientRatio>
+template <std::size_t CoefficientRatio = 1,
+          typename ActiveSubMatrix = MatrixBounds<0, 0, Dynamic, Dynamic>>
 struct OptimizerState {
   constexpr static std::size_t operand_coefficient_ratio = CoefficientRatio;
+  using active_sub_matrix = ActiveSubMatrix;
 };
 
-template <typename Expr, typename ParentState = OptimizerState<1>>
+template <typename Expr, typename ParentState = OptimizerState<>>
 constexpr decltype(auto) optimize_expression();
-
-template <typename Policy, typename ParentState>
-constexpr std::size_t get_policy_cost();
-
-template <typename Policy, typename ParentState, std::size_t OperandIndex>
-constexpr std::size_t get_operand_policy_cost() {
-  using ExprTraits = ExpressionTraits<typename Policy::expression>;
-  using OperandState =
-      OptimizerState<ParentState::operand_coefficient_ratio *
-                     std::get<OperandIndex>(
-                         ExprTraits::operand_coefficient_ratio)>;
-  using OperandPolicy =
-      typename Policy::template operand_policy_type<typename Policy::expression,
-                                                    OperandIndex>;
-  return get_policy_cost<OperandPolicy, OperandState>();
-}
-
-template <typename Policy, typename ParentState, std::size_t... Is>
-constexpr std::size_t get_policy_cost_helper(std::index_sequence<Is...>) {
-  using ExprTraits = ExpressionTraits<typename Policy::expression>;
-  std::size_t cost =
-      (ExprTraits::operation_counts * ParentState::operand_coefficient_ratio)
-          .cost();
-  if constexpr (sizeof...(Is) > 0)
-    cost += (get_operand_policy_cost<Policy, ParentState, Is>() + ...);
-  return cost;
-}
-
-template <typename Policy, typename ParentState>
-constexpr std::size_t get_policy_cost() {
-  return get_policy_cost_helper<Policy, ParentState>(
-      std::make_index_sequence<Policy::num_operands>{});
-}
 
 template <typename Expr, typename ParentState, std::size_t OperandIndex>
 constexpr decltype(auto) optimize_operand() {
@@ -81,29 +52,58 @@ constexpr decltype(auto) optimize_operand() {
   constexpr std::size_t operand_coefficient_ratio =
       ParentState::operand_coefficient_ratio *
       std::get<OperandIndex>(ExprTraits::operand_coefficient_ratio);
-  return optimize_expression<Operand,
-                             OptimizerState<operand_coefficient_ratio>>();
+  using operand_active_sub_matrix = std::tuple_element_t<
+      OperandIndex, typename ExprTraits::template operand_active_sub_matrix<
+                        typename ParentState::active_sub_matrix>>;
+  return optimize_expression<
+      Operand,
+      OptimizerState<operand_coefficient_ratio, operand_active_sub_matrix>>();
+}
+
+template <typename Expr, typename ActiveSubMatrix>
+constexpr std::size_t coefficient_count_hint() {
+  using ExprTraits = ExpressionTraits<Expr>;
+  if constexpr (std::is_same_v<typename ExprTraits::expression_type,
+                               details::matrix_tag>) {
+    // If the active submatrix is statically sized, we can calculate the
+    // coefficient count at compile time. Otherwise, we have to use the
+    // size hint from the expression.
+    using active_bounds =
+        MatrixBounds<0, 0, ActiveSubMatrix::num_cols_compile_time,
+                     ActiveSubMatrix::num_cols_compile_time>;
+    if constexpr (active_bounds::is_static()) {
+      return active_bounds::num_rows_compile_time *
+             active_bounds::num_cols_compile_time;
+    } else {
+      return ExprTraits::num_rows_hint * ExprTraits::num_cols_hint;
+    }
+  } else {
+    return 1;
+  }
 }
 
 template <typename Expr, typename ParentState, std::size_t... Is>
 constexpr decltype(auto) optimize_expression_helper(
     std::index_sequence<Is...>) {
   using ExprTraits = ExpressionTraits<Expr>;
-  // FIXME: Cost calculation is not yet correct. This needs to be
-  // multiplied by the number of coefficients in the expression.
+
   constexpr std::size_t lazy_cost =
-      (ExprTraits::operation_counts * ParentState::operand_coefficient_ratio)
+      (ExprTraits::operation_counts * ParentState::operand_coefficient_ratio *
+       coefficient_count_hint<Expr, typename ParentState::active_sub_matrix>())
           .cost();
   constexpr auto lazy_path = OptimizedEvaluatorPolicy<
-      lazy_cost, true,
+      lazy_cost, true, typename ParentState::active_sub_matrix,
       decltype(optimize_operand<Expr, ParentState, Is>())...>{};
 
-  // FIXME: Cost calculation is not yet correct. This needs to be
-  // multiplied by the number of coefficients in the expression.
-  constexpr std::size_t eager_cost = ExprTraits::operation_counts.cost();
+  constexpr std::size_t eager_cost =
+      (ExprTraits::operation_counts *
+       coefficient_count_hint<Expr, typename ParentState::active_sub_matrix>())
+          .cost();
   constexpr auto eager_path = OptimizedEvaluatorPolicy<
-      eager_cost, false,
-      decltype(optimize_operand<Expr, OptimizerState<1>, Is>())...>{};
+      eager_cost, false, typename ParentState::active_sub_matrix,
+      decltype(optimize_operand<
+               Expr, OptimizerState<1, typename ParentState::active_sub_matrix>,
+               Is>())...>{};
 
   if constexpr (decltype(lazy_path)::cost > decltype(eager_path)::cost) {
     return eager_path;
@@ -119,7 +119,8 @@ constexpr decltype(auto) optimize_expression() {
                 details::is_expression_literal_v<Expr>);
   if constexpr (details::is_matrix_literal_v<Expr> ||
                 details::is_scalar_literal_v<Expr>) {
-    return OptimizedEvaluatorPolicy<0, false>{};
+    return OptimizedEvaluatorPolicy<0, false,
+                                    typename ParentState::active_sub_matrix>{};
   } else if constexpr (details::is_expression_literal_v<Expr>) {
     using ExprTraits = ExpressionTraits<Expr>;
     return optimize_expression_helper<Expr, ParentState>(

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <vector>
 
 #include "details/optila_expression.h"
 #include "details/optila_matrix.h"
@@ -59,6 +60,30 @@ constexpr static void assign_array_2d_to_matrix(
   }
 }
 
+template <typename ValueType, typename To>
+const static void assign_vector_2d_to_matrix(
+    const std::vector<std::vector<ValueType>>& from, To& to) {
+  const std::size_t NumRows = from.size();
+  const std::size_t NumCols = from[0].size();
+  if constexpr (To::num_rows_compile_time == Dynamic ||
+                To::num_cols_compile_time == Dynamic) {
+    to.resize(NumRows, NumCols);
+  } else {
+    static_assert(NumRows == To::num_rows_compile_time &&
+                      NumCols == To::num_cols_compile_time,
+                  "Static matrix initialization must match matrix size");
+  }
+
+  std::size_t i = 0;
+  for (const auto& row : from) {
+    std::size_t j = 0;
+    for (const auto& elem : row) {
+      to(i, j++) = elem;
+    }
+    ++i;
+  }
+}
+
 }  // namespace details
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
@@ -72,6 +97,10 @@ class Matrix : public details::matrix_tag {
   using value_type = ValueType;
 
   constexpr Matrix() = default;
+
+  Matrix(const std::vector<std::vector<ValueType>>& from) {
+    details::assign_vector_2d_to_matrix(from, *this);
+  }
 
   // Constructor for nested-brace syntax
   template <

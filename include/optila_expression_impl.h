@@ -11,17 +11,17 @@
 
 namespace optila {
 
-template <typename ExprType, typename Operation, typename... Operands>
+template <typename ExprType, typename Op, typename... Operands>
 class ExpressionImpl;
 
 // Partial specialization for matrix_tag
-template <typename Operation, typename... Operands>
-class ExpressionImpl<details::matrix_tag, Operation, Operands...>
+template <typename Op, typename... Operands>
+class ExpressionImpl<details::matrix_tag, Op, Operands...>
     : public details::matrix_tag {
-  using Expr = Expression<Operation, Operands...>;
+  using Expr = Expression<Op, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
 
-  using Derived = Expression<Operation, Operands...>;
+  using Derived = Expression<Op, Operands...>;
   constexpr Derived& derived() { return static_cast<Derived&>(*this); }
   constexpr const Derived& derived() const {
     return static_cast<const Derived&>(*this);
@@ -44,32 +44,35 @@ class ExpressionImpl<details::matrix_tag, Operation, Operands...>
 };
 
 // Partial specialization for scalar_tag
-template <typename Operation, typename... Operands>
-class ExpressionImpl<details::scalar_tag, Operation, Operands...>
+template <typename Op, typename... Operands>
+class ExpressionImpl<details::scalar_tag, Op, Operands...>
     : public details::scalar_tag {};
 
-// Expression inherits from Operation to provide storage for the operation
+// Expression inherits from Op to provide storage for the operation
 // in the rare case that it is stateful. Otherwise, empty base optimization
 // (EBO) will ensure that the operation does not take up any additional space.
-template <typename Operation, typename... Operands>
+template <typename Op, typename... Operands>
 class Expression
-    : public ExpressionImpl<typename ExpressionTraits<Expression<
-                                Operation, Operands...>>::expression_type,
-                            Operation, Operands...>,
-      public Operation {
-  using Expr = Expression<Operation, Operands...>;
+    : public ExpressionImpl<typename ExpressionTraits<
+                                Expression<Op, Operands...>>::expression_type,
+                            Op, Operands...>,
+      public Op {
+  using Expr = Expression<Op, Operands...>;
   using ExprTraits = ExpressionTraits<Expr>;
 
   using operand_storage_type =
       std::tuple<details::safe_type_qualifiers_t<Operands>...>;
+  using operand_return_type =
+      details::efficient_type_qualifiers_t<operand_storage_type>;
+  using operation_return_type = details::efficient_type_qualifiers_t<Op>;
 
  public:
   using value_type = typename ExprTraits::value_type;
   using result_type = typename ExprTraits::result_type;
 
-  constexpr explicit Expression(Operation&& operation, Operands&&... operands)
+  constexpr explicit Expression(Op&& operation, Operands&&... operands)
       : m_operands(std::forward<Operands>(operands)...),
-        Operation(std::forward<Operation>(operation)) {
+        Op(std::forward<Op>(operation)) {
     using ExprTraits = ExpressionTraits<Expr>;
     if constexpr (std::conjunction_v<
                       details::is_static_expression<Operands>...>) {
@@ -79,12 +82,7 @@ class Expression
     }
   }
 
-  using operation = Operation;
-
-  // Return the tuple of operands by-value only if it is small and trivial.
-  // Otherwise, return by const reference.
-  using operand_return_type =
-      details::efficient_type_qualifiers_t<operand_storage_type>;
+  constexpr operation_return_type operation() const { return *this; }
   constexpr operand_return_type operands() const { return m_operands; }
 
  private:
@@ -92,8 +90,8 @@ class Expression
 };
 
 // Deduction guide for Expression
-template <typename Operation, typename... Operands,
-          typename = std::enable_if_t<details::is_operation_v<Operation>>>
-Expression(Operation&&, Operands&&...) -> Expression<Operation, Operands...>;
+template <typename Op, typename... Operands,
+          typename = std::enable_if_t<details::is_operation_v<Op>>>
+Expression(Op&&, Operands&&...) -> Expression<Op, Operands...>;
 
 }  // namespace optila

@@ -1,6 +1,41 @@
 #include <cassert>
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
 
 #include "optila.h"
+
+#define OPTILA_TEST_CONSTEXPR
+
+template <typename T, std::size_t NumRows, std::size_t NumCols, typename Policy>
+void generate_random_matrix(optila::Matrix<T, NumRows, NumCols, Policy> &A) {
+  if constexpr (NumRows == optila::Dynamic || NumCols == optila::Dynamic) {
+    A.resize(NumRows, NumCols);
+  }
+  for (std::size_t i = 0; i < A.num_rows(); ++i) {
+    for (std::size_t j = 0; j < A.num_cols(); ++j) {
+      A(i, j) = static_cast<double>(rand()) / RAND_MAX;
+    }
+  }
+}
+
+template <typename ArgA, typename ArgB, typename ArgC>
+double __attribute__((noinline)) do_my_things(ArgA A, ArgB B, ArgC c) {
+  return evaluate((A * B) + c)(0, 0);
+}
+
+int random_tests() {
+  optila::Matrix<double, 8, 8> A{};
+  optila::Matrix<double, 8, 8> B{};
+  optila::Matrix<double, 8, 8> c{};
+  generate_random_matrix(A);
+  generate_random_matrix(B);
+  generate_random_matrix(c);
+
+  std::cout << do_my_things(A, B, c) << std::endl;
+
+  return 0;
+}
 
 int assignment_tests() {
   optila::Matrix<double, optila::Dynamic, 3> A =
@@ -11,6 +46,48 @@ int assignment_tests() {
   optila::Matrix<double, 3, 3> B = A;
 
   optila::Matrix<double, 3, 3> C = A * B;
+
+  return 0;
+}
+
+int active_sub_matrix_tests() {
+  static constexpr auto static_A =
+      optila::make_matrix<double, 6, 6>({{1, 2, 3, 4, 5, 6},
+                                         {7, 8, 9, 10, 11, 12},
+                                         {13, 14, 15, 16, 17, 18},
+                                         {19, 20, 21, 22, 23, 24},
+                                         {25, 26, 27, 28, 29, 30},
+                                         {31, 32, 33, 34, 35, 36}});
+
+  static constexpr auto static_B =
+      optila::make_matrix<double, 6, 6>({{11, 12, 13, 14, 15, 16},
+                                         {17, 18, 19, 20, 21, 22},
+                                         {23, 24, 25, 26, 27, 28},
+                                         {29, 30, 31, 32, 33, 34},
+                                         {35, 36, 37, 38, 39, 40},
+                                         {41, 42, 43, 44, 45, 46}});
+
+  static constexpr optila::Matrix static_C = optila::submatrix<3, 3, 2, 2>(
+      (static_A + static_B) * (static_B - static_A));
+  static_assert(static_C ==
+                (optila::Matrix<double, 2, 2>{{{3180, 3180}, {3900, 3900}}}));
+
+  auto A = optila::make_matrix<double, 6, 6>({{1, 2, 3, 4, 5, 6},
+                                              {7, 8, 9, 10, 11, 12},
+                                              {13, 14, 15, 16, 17, 18},
+                                              {19, 20, 21, 22, 23, 24},
+                                              {25, 26, 27, 28, 29, 30},
+                                              {31, 32, 33, 34, 35, 36}});
+
+  auto B = optila::make_matrix<double, 6, 6>({{11, 12, 13, 14, 15, 16},
+                                              {17, 18, 19, 20, 21, 22},
+                                              {23, 24, 25, 26, 27, 28},
+                                              {29, 30, 31, 32, 33, 34},
+                                              {35, 36, 37, 38, 39, 40},
+                                              {41, 42, 43, 44, 45, 46}});
+
+  optila::Matrix C = optila::submatrix<3, 3, 2, 2>((A + B) * (B - A));
+  assert(C == (optila::Matrix<double, 2, 2>{{{3180, 3180}, {3900, 3900}}}));
 
   return 0;
 }
@@ -46,6 +123,7 @@ int other_tests() {
   assert(G == (optila::Matrix<double, optila::Dynamic, optila::Dynamic>{
                   {{30, 60, 90}, {120, 150, 180}, {210, 240, 270}}}));
 
+#ifdef OPTILA_TEST_CONSTEXPR
   // Statically-known matrices
   static constexpr auto static_A =
       optila::make_matrix<double, 3, 3>({{1, 2, 3}, {4, 5, 6}, {7, 8, 9}});
@@ -83,6 +161,87 @@ int other_tests() {
   static_assert(
       static_G ==
       decltype(static_G){{{30, 60, 90}, {120, 150, 180}, {210, 240, 270}}});
+#endif
+  return 0;
+}
+
+int constexpr_nested_tests() {
+  static constexpr optila::Matrix<double, 3, 3> A{
+      {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}};
+  static_assert(A.num_rows() == 3);
+  static_assert(A.num_cols() == 3);
+
+  static constexpr optila::Matrix<double, 3, 3> B{
+      {{9, 8, 7}, {6, 5, 4}, {3, 2, 1}}};
+
+  // Perform matrix operations
+  static constexpr auto C = A * B;
+  static_assert(C == (optila::Matrix<double, 3, 3>{
+                         {{30, 24, 18}, {84, 69, 54}, {138, 114, 90}}}));
+  static constexpr auto D = B * A;
+  static_assert(D == (optila::Matrix<double, 3, 3>{
+                         {{90, 114, 138}, {54, 69, 84}, {18, 24, 30}}}));
+
+  // Nested matrix multiplication
+  static constexpr auto E = (C * D) * (A * B);
+  static_assert(E ==
+                (optila::Matrix<double, 3, 3>{{{1516320, 1247076, 977832},
+                                               {4304016, 3539781, 2775546},
+                                               {7091712, 5832486, 4573260}}}));
+
+  // Additional operations
+  static constexpr auto F = E + D - C;
+
+  static constexpr optila::Matrix<double, 3, 1> x{{{1}, {2}, {3}}};
+  static constexpr optila::Matrix<double, 1, 3> y{{{1, 2, 3}}};
+
+  static constexpr auto z = optila::dot(x, optila::transpose(y));
+
+  static constexpr auto z2 = optila::dot(x, x);
+
+  // Test implicit evaluation of a matrix expression into a dynamic matrix
+  static constexpr optila::Matrix G = F;
+  static_assert(G ==
+                (optila::Matrix<double, 3, 3>{{{1516380, 1247166, 977952},
+                                               {4303986, 3539781, 2775576},
+                                               {7091592, 5832396, 4573200}}}));
+
+  return 0;
+}
+
+int nested_tests() {
+  optila::Matrix<double, optila::Dynamic, optila::Dynamic> A{
+      {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}};
+  assert(A.num_rows() == 3);
+  assert(A.num_cols() == 3);
+
+  optila::Matrix<double, optila::Dynamic, optila::Dynamic> B{
+      {{9, 8, 7}, {6, 5, 4}, {3, 2, 1}}};
+
+  // Perform matrix operations
+  auto C = A * B;
+  auto D = B * A;
+
+  // Nested matrix multiplication
+  auto E = (C * D) * (A * B);
+
+  // Additional operations
+  auto F = E + D - C;
+
+  optila::Matrix<double, optila::Dynamic, 1> x{{{1}, {2}, {3}}};
+  optila::Matrix<double, 1, optila::Dynamic> y{{{1, 2, 3}}};
+
+  auto z = optila::dot(x, optila::transpose(y));
+  std::cout << z << std::endl;
+
+  auto z2 = optila::dot(x, x);
+  std::cout << optila::Scalar(3.0) * z2 << std::endl;
+
+  // Test implicit evaluation of a matrix expression into a dynamic matrix
+  optila::Matrix G = optila::submatrix<0, 0, 3, 3>(F);
+  assert(G == (optila::Matrix<double, 3, 3>{{{1516380, 1247166, 977952},
+                                             {4303986, 3539781, 2775576},
+                                             {7091592, 5832396, 4573200}}}));
 
   return 0;
 }
@@ -150,6 +309,7 @@ int dynamic_tests() {
 }
 
 int constexpr_tests() {
+#ifdef OPTILA_TEST_CONSTEXPR
   static constexpr optila::Matrix<double, 3, 3> A{
       {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}};
 
@@ -192,15 +352,19 @@ int constexpr_tests() {
   static_assert(H(0, 1) == 6);
   static_assert(H(1, 0) == 8);
   static_assert(H(1, 1) == 9);
-
+#endif
   return 0;
 }
 
 int main(int argc, char *argv[]) {
   int retval = 0;
+  retval -= active_sub_matrix_tests();
+  retval -= constexpr_nested_tests();
+  retval -= nested_tests();
   retval -= dynamic_tests();
   retval -= constexpr_tests();
   retval -= other_tests();
   retval -= assignment_tests();
+  retval -= random_tests();
   return retval;
 }
