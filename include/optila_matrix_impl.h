@@ -209,6 +209,14 @@ class Matrix : public details::matrix_tag {
   }
 };
 
+template <typename ValueType, std::size_t NumRows,
+          typename Policy = DefaultMatrixPolicy>
+using Vector = Matrix<ValueType, NumRows, 1, Policy>;
+
+template <typename ValueType, std::size_t NumCols,
+          typename Policy = DefaultMatrixPolicy>
+using RowVector = Matrix<ValueType, 1, NumCols, Policy>;
+
 // Deduction guide for Matrix
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 Matrix(const ValueType (&)[NumRows][NumCols])
@@ -226,6 +234,16 @@ template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 constexpr decltype(auto) make_matrix(
     const ValueType (&from)[NumRows][NumCols]) {
   return Matrix<ValueType, NumRows, NumCols>(from);
+}
+
+template <typename ValueType, std::size_t NumRows>
+constexpr decltype(auto) make_vector(const ValueType (&from)[NumRows]) {
+  return Vector<ValueType, NumRows>(from);
+}
+
+template <typename ValueType, std::size_t NumCols>
+constexpr decltype(auto) make_row_vector(const ValueType (&from)[NumCols]) {
+  return Vector<ValueType, NumCols>(from);
 }
 
 }  // namespace optila

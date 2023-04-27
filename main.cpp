@@ -192,8 +192,8 @@ int constexpr_nested_tests() {
   // Additional operations
   static constexpr auto F = E + D - C;
 
-  static constexpr optila::Matrix<double, 3, 1> x{{{1}, {2}, {3}}};
-  static constexpr optila::Matrix<double, 1, 3> y{{{1, 2, 3}}};
+  static constexpr optila::Vector<double, 3> x{{{1}, {2}, {3}}};
+  static constexpr optila::RowVector<double, 3> y{{{1, 2, 3}}};
 
   static constexpr auto z = optila::dot(x, optila::transpose(y));
 
@@ -228,8 +228,8 @@ int nested_tests() {
   // Additional operations
   auto F = E + D - C;
 
-  optila::Matrix<double, optila::Dynamic, 1> x{{{1}, {2}, {3}}};
-  optila::Matrix<double, 1, optila::Dynamic> y{{{1, 2, 3}}};
+  optila::Vector<double, optila::Dynamic> x{{{1}, {2}, {3}}};
+  optila::RowVector<double, optila::Dynamic> y{{{1, 2, 3}}};
 
   auto z = optila::dot(x, optila::transpose(y));
   std::cout << z << std::endl;
@@ -256,7 +256,7 @@ int dynamic_tests() {
   optila::Matrix<double, 3, 3> Acopy = A;
   assert(Acopy == A);
 
-  optila::Matrix<double, optila::Dynamic, optila::Dynamic> b{{{1}, {2}, {3}}};
+  optila::Vector<double, optila::Dynamic> b{{{1}, {2}, {3}}};
   assert(b.num_rows() == 3);
   assert(b.num_cols() == 1);
 
@@ -266,7 +266,7 @@ int dynamic_tests() {
   assert(C.num_cols() == 1);
 
   // Test implicit evaluation of a matrix expression into a static matrix
-  optila::Matrix<double, 3, 1> D = C;
+  optila::Vector<double, 3> D = C;
   assert(D(0, 0) == 14);
   assert(D(1, 0) == 32);
   assert(D(2, 0) == 50);
