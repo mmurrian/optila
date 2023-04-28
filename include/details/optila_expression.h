@@ -1,3 +1,8 @@
+// Copyright (c) 2023 Matthew Murrian
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #pragma once
 
 #include "optila_matrix.h"
@@ -15,8 +20,7 @@ template <typename T>
 struct is_expression_literal : std::false_type {};
 
 template <typename Op, typename... Operands>
-struct is_expression_literal<Expression<Op, Operands...>>
-    : std::true_type {};
+struct is_expression_literal<Expression<Op, Operands...>> : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_expression_literal_v = is_expression_literal<T>::value;

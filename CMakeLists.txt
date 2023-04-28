@@ -1,3 +1,8 @@
+# Copyright (c) 2023 Matthew Murrian
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 cmake_minimum_required(VERSION 3.10)
 
 project(OPTiLA LANGUAGES CXX)
@@ -80,6 +85,11 @@ add_subdirectory(thirdparty/benchmark)
 
 find_package(Eigen3 REQUIRED)
 find_package(Armadillo REQUIRED)
+find_library(GPERFTOOLS libprofiler.so)
 
+set(CMAKE_EXE_LINKER_FLAGS
+    "${CMAKE_EXE_LINKER_FLAGS} -Wl,-no-as-needed -lprofiler")
 add_executable(OPTiLABenchmark benchmark.cpp)
-target_link_libraries(OPTiLABenchmark PRIVATE OPTiLA benchmark::benchmark Eigen3::Eigen ${ARMADILLO_LIBRARIES})
+target_link_libraries(
+  OPTiLABenchmark PRIVATE OPTiLA benchmark::benchmark Eigen3::Eigen
+                          ${ARMADILLO_LIBRARIES})
