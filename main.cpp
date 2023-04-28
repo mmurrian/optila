@@ -266,7 +266,7 @@ int dynamic_tests() {
   assert(C.num_cols() == 1);
 
   // Test implicit evaluation of a matrix expression into a static matrix
-  optila::Vector<double, 3> D = C;
+  optila::Vector D = C;
   assert(D(0, 0) == 14);
   assert(D(1, 0) == 32);
   assert(D(2, 0) == 50);

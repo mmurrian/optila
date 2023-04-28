@@ -364,6 +364,32 @@ class Evaluator<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>, Strategy,
   result_storage_type m_value;
 };
 
+template <typename ValueType, std::size_t NumRows, typename MatrixPolicy,
+          typename Strategy, typename EvaluatorPolicyChain>
+class Evaluator<Vector<ValueType, NumRows, MatrixPolicy>, Strategy,
+                EvaluatorPolicyChain>
+    : public Evaluator<Matrix<ValueType, NumRows, 1, MatrixPolicy>, Strategy,
+                       EvaluatorPolicyChain> {
+  using Base = Evaluator<Matrix<ValueType, NumRows, 1, MatrixPolicy>, Strategy,
+                         EvaluatorPolicyChain>;
+
+ public:
+  using Base::Base;
+};
+
+template <typename ValueType, std::size_t NumCols, typename MatrixPolicy,
+          typename Strategy, typename EvaluatorPolicyChain>
+class Evaluator<RowVector<ValueType, NumCols, MatrixPolicy>, Strategy,
+                EvaluatorPolicyChain>
+    : public Evaluator<Matrix<ValueType, 1, NumCols, MatrixPolicy>, Strategy,
+                       EvaluatorPolicyChain> {
+  using Base = Evaluator<Matrix<ValueType, 1, NumCols, MatrixPolicy>, Strategy,
+                         EvaluatorPolicyChain>;
+
+ public:
+  using Base::Base;
+};
+
 template <typename ValueType, typename Strategy, typename EvaluatorPolicyChain>
 class Evaluator<Scalar<ValueType>, Strategy, EvaluatorPolicyChain>
     : public details::scalar_tag {

@@ -74,6 +74,14 @@ struct ExpressionTraits<Matrix<ValueType, NumRows, NumCols, MatrixPolicy>> {
   constexpr static void dynamic_validate() {}
 };
 
+template <typename ValueType, std::size_t NumRows, typename MatrixPolicy>
+struct ExpressionTraits<Vector<ValueType, NumRows, MatrixPolicy>>
+    : ExpressionTraits<Matrix<ValueType, NumRows, 1, MatrixPolicy>> {};
+
+template <typename ValueType, std::size_t NumCols, typename MatrixPolicy>
+struct ExpressionTraits<RowVector<ValueType, NumCols, MatrixPolicy>>
+    : ExpressionTraits<Matrix<ValueType, 1, NumCols, MatrixPolicy>> {};
+
 template <typename ValueType>
 struct ExpressionTraits<Scalar<ValueType>> {
  private:
@@ -582,7 +590,8 @@ struct ExpressionTraits<Expression<Operation::DotProduct, LhsType, RhsType>> {
 
   constexpr static void static_validate() {
     static_assert(
-        details::is_static_vector_v<Lhs> && details::is_static_vector_v<Rhs>,
+        (details::is_vector_v<Lhs> && details::is_vector_v<Rhs>) ||
+            (details::is_row_vector_v<Lhs> && details::is_row_vector_v<Rhs>),
         "Dot product requires vector operands");
     static_assert(Lhs::num_rows_compile_time == Rhs::num_rows_compile_time &&
                       Lhs::num_cols_compile_time == Rhs::num_cols_compile_time,

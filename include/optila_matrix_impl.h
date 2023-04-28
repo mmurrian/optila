@@ -211,11 +211,49 @@ class Matrix : public details::matrix_tag {
 
 template <typename ValueType, std::size_t NumRows,
           typename Policy = DefaultMatrixPolicy>
-using Vector = Matrix<ValueType, NumRows, 1, Policy>;
+class Vector : public Matrix<ValueType, NumRows, 1, Policy> {
+  using Base = Matrix<ValueType, NumRows, 1, Policy>;
+
+ public:
+  using Base::Base;
+
+  explicit Vector(std::size_t num_rows) { Base::resize(num_rows, 1); }
+
+  [[nodiscard]] constexpr typename Base::value_type& operator()(std::size_t i) {
+    return Base::operator()(i, 0);
+  }
+
+  // Return by value or const reference depending on the size and other
+  // characteristics of the value type
+  using const_value_type =
+      details::efficient_type_qualifiers_t<typename Base::value_type>;
+  [[nodiscard]] constexpr const_value_type operator()(std::size_t i) const {
+    return Base::operator()(i, 0);
+  }
+};
 
 template <typename ValueType, std::size_t NumCols,
           typename Policy = DefaultMatrixPolicy>
-using RowVector = Matrix<ValueType, 1, NumCols, Policy>;
+class RowVector : public Matrix<ValueType, 1, NumCols, Policy> {
+  using Base = Matrix<ValueType, 1, NumCols, Policy>;
+
+ public:
+  using Base::Base;
+
+  explicit RowVector(std::size_t num_cols) { Base::resize(1, num_cols); }
+
+  [[nodiscard]] constexpr typename Base::value_type& operator()(std::size_t j) {
+    return Base::operator()(0, j);
+  }
+
+  // Return by value or const reference depending on the size and other
+  // characteristics of the value type
+  using const_value_type =
+      details::efficient_type_qualifiers_t<typename Base::value_type>;
+  [[nodiscard]] constexpr const_value_type operator()(std::size_t j) const {
+    return Base::operator()(0, j);
+  }
+};
 
 // Deduction guide for Matrix
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
@@ -229,6 +267,20 @@ template <typename Expr,
 Matrix(Expr&& expr) -> Matrix<typename std::decay_t<Expr>::value_type,
                               std::decay_t<Expr>::num_rows_compile_time,
                               std::decay_t<Expr>::num_cols_compile_time>;
+
+template <typename Expr,
+          typename = std::enable_if_t<
+              details::is_expression_literal_v<std::decay_t<Expr>> &&
+              details::is_vector_v<Expr>>>
+Vector(Expr&& expr) -> Vector<typename std::decay_t<Expr>::value_type,
+                              std::decay_t<Expr>::num_rows_compile_time>;
+
+template <typename Expr,
+          typename = std::enable_if_t<
+              details::is_expression_literal_v<std::decay_t<Expr>> &&
+              details::is_row_vector_v<Expr>>>
+RowVector(Expr&& expr) -> RowVector<typename std::decay_t<Expr>::value_type,
+                                    std::decay_t<Expr>::num_cols_compile_time>;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols>
 constexpr decltype(auto) make_matrix(

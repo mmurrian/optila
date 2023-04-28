@@ -173,6 +173,12 @@ template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           typename Policy>
 class Matrix;
 
+template <typename ValueType, std::size_t NumRows, typename Policy>
+class Vector;
+
+template <typename ValueType, std::size_t NumCols, typename Policy>
+class RowVector;
+
 namespace details {
 
 struct matrix_tag {};
@@ -185,30 +191,22 @@ template <typename T>
 inline constexpr bool is_matrix_v = is_matrix<T>::value;
 
 template <typename T>
-struct is_static_row_vector
+struct is_row_vector
     : std::conjunction<
           is_matrix<T>,
           std::bool_constant<std::decay_t<T>::num_rows_compile_time == 1>> {};
 
 template <typename T>
-inline constexpr bool is_static_row_vector_v = is_static_row_vector<T>::value;
+inline constexpr bool is_row_vector_v = is_row_vector<T>::value;
 
 template <typename T>
-struct is_static_column_vector
+struct is_vector
     : std::conjunction<
           is_matrix<T>,
           std::bool_constant<std::decay_t<T>::num_cols_compile_time == 1>> {};
 
 template <typename T>
-inline constexpr bool is_static_column_vector_v =
-    is_static_column_vector<T>::value;
-
-template <typename T>
-struct is_static_vector
-    : std::disjunction<is_static_row_vector<T>, is_static_column_vector<T>> {};
-
-template <typename T>
-inline constexpr bool is_static_vector_v = is_static_vector<T>::value;
+inline constexpr bool is_vector_v = is_vector<T>::value;
 
 template <typename T>
 struct is_matrix_literal : std::false_type {};
@@ -218,8 +216,36 @@ template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
 struct is_matrix_literal<Matrix<ValueType, NumRows, NumCols, Policy>>
     : std::true_type {};
 
+template <typename ValueType, std::size_t NumRows, typename Policy>
+struct is_matrix_literal<Vector<ValueType, NumRows, Policy>> : std::true_type {
+};
+
+template <typename ValueType, std::size_t NumCols, typename Policy>
+struct is_matrix_literal<RowVector<ValueType, NumCols, Policy>>
+    : std::true_type {};
+
 template <typename T>
 inline constexpr bool is_matrix_literal_v = is_matrix_literal<T>::value;
+
+template <typename T>
+struct is_vector_literal : std::false_type {};
+
+template <typename ValueType, std::size_t NumRows, typename Policy>
+struct is_vector_literal<Vector<ValueType, NumRows, Policy>> : std::true_type {
+};
+
+template <typename T>
+inline constexpr bool is_vector_literal_v = is_vector_literal<T>::value;
+
+template <typename T>
+struct is_row_vector_literal : std::false_type {};
+
+template <typename ValueType, std::size_t NumCols, typename Policy>
+struct is_row_vector_literal<RowVector<ValueType, NumCols, Policy>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_row_vector_literal_v = is_row_vector_literal<T>::value;
 
 template <typename ValueType, std::size_t NumRows, std::size_t NumCols,
           bool OwnsData = true>
